@@ -81,8 +81,8 @@ if __name__=='__main__':
   #compile latex document
   subprocess.run(['lualatex','rootpdf_to_png_latexdoc.tex'])
   #generate and name png
-  subprocess.run(['pdftoppm','-png','rootpdf_to_png_latexdoc.pdf',input_filename,'-r',str(200*figures_per_row)])
-  subprocess.run(['mv',input_filename+'-1.png',output_name+'.png'])
+  subprocess.run(['pdftopng','-r',str(200*figures_per_row),'rootpdf_to_png_latexdoc.pdf',input_filename])
+  subprocess.run(['mv',input_filename+'-000001.png',output_name+'.png'])
   #clean up
   subprocess.run(['rm','rootpdf_to_png_latexdoc.tex'])
   subprocess.run(['rm','rootpdf_to_png_latexdoc.aux'])
