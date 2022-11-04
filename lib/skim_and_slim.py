@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 '''
 Function that generates skimmed/slimmed ROOT n-tuples, primarily for MVA training
 '''

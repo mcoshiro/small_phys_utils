@@ -59,9 +59,10 @@ if __name__=='__main__':
       'll_m.size()>0&&llphoton_m.size()>0',
       'stitch_dy||(type/1000!=6)',
       '(ll_m[0]>50)&&(photon_pt[0]/llphoton_m[0]>=15.0/110.0)&&((llphoton_m[0]+ll_m[0])>185)&&(photon_drmin[0]>0.4)',
-      '(ll_lepid[0]==11&&el_pt[ll_i1[0]]>25&&el_pt[ll_i2[0]]>15)||(ll_lepid[0]==13&&mu_pt[ll_i1[0]]>20&&mu_pt[ll_i2[0]]>10)',
-      'photon_idmva[0]>0.5',
-      'llphoton_m[0]>120&&llphoton_m[0]<130']
+      '(ll_lepid[0]==11&&el_pt[ll_i1[0]]>25&&el_pt[ll_i2[0]]>15)||(ll_lepid[0]==13&&mu_pt[ll_i1[0]]>20&&mu_pt[ll_i2[0]]>10)']
+      #'photon_idmva[0]>0.5',
+      #'llphoton_m[0]>122&&llphoton_m[0]<128']
+      #'photon_pt[0]<35']
   #defines = [('higgsdr','llphoton_dr[0]'),('higgspt','llphoton_pt[0]'),('zpt','ll_pt[0]'),('phpt','photon_pt[0]')]
   #branches = ('higgsdr','higgspt','zpt','phpt')
   defines = [('photon_mva','photon_idmva[0]'),
@@ -70,7 +71,7 @@ if __name__=='__main__':
              ('pt_mass','llphoton_pt[0]/llphoton_m[0]'),
              ('cosTheta','llphoton_cosTheta[0]'),
              ('costheta','llphoton_costheta[0]'),
-             ('phi','llphoton_phi[0]'),
+             ('phi','llphoton_psi[0]'),
              ('photon_res','photon_pterr[0]/photon_pt[0]'),
              ('photon_rapidity','photon_eta[0]'),
              ('l1_rapidity','get_l1_rapidity(el_pt,el_eta,mu_pt,mu_eta,ll_lepid,ll_i1,ll_i2)'),
@@ -79,20 +80,28 @@ if __name__=='__main__':
              #('decorr_photon_pt','photon_pt[0]-0.207*llphoton_m[0]'),
              ('photon_pt_mass','photon_pt[0]/llphoton_m[0]')]
   branches = ('photon_mva','min_dR','max_dR','pt_mass','cosTheta','costheta',
-      'phi','photon_res','photon_rapidity','l1_rapidity','l2_rapidity','photon_ptransverse','photon_pt_mass','weight')
+      'phi','photon_res','photon_rapidity','l1_rapidity','l2_rapidity','photon_ptransverse','photon_pt_mass','w_lumi')
   #define drmax, pt_mass, first index
   #make n-tuples
-  write_ntuples(['/net/cms17/cms17r0/pico/NanoAODv2/zgamma_signal/2017/signal/skim_llg/*.root'],
+  #skim_and_slim.write_ntuples(['/net/cms17/cms17r0/pico/NanoAODv2/zgamma_signal/2017/signal/skim_llg/pico_llg_*.root',
+  skim_and_slim.write_ntuples([
+      '/net/cms17/cms17r0/pico/NanoAODv9/htozgamma_deathvalley_v2/2016/mc/skim_llg/*HToZG*M-125*',
+      '/net/cms17/cms17r0/pico/NanoAODv9/htozgamma_deathvalley_v2/2017/mc/skim_llg/*HToZG*M-125*',
+      '/net/cms17/cms17r0/pico/NanoAODv9/htozgamma_deathvalley_v2/2018/mc/skim_llg/*HToZG*M-125*'],
       cuts,
-      'train_kinbdt_idmva_nomasscut_sig.root',
+      'kinbdt_fullstats_sig.root',
       defines,
       'tree',
       branches)
-  write_ntuples(['/net/cms17/cms17r0/pico/NanoAODv9/htozgamma_deathvalley_v2/2016/mc/skim_llg/pico_llg_DYJetsToLL*.root','/net/cms17/cms17r0/pico/NanoAODv9/htozgamma_deathvalley_v2/2016/mc/skim_llg/pico_llg_ZGToLLG*.root'],
+  skim_and_slim.write_ntuples(['/net/cms17/cms17r0/pico/NanoAODv9/htozgamma_deathvalley_v2/2016/mc/skim_llg/pico_llg_DYJetsToLL*.root',
+      '/net/cms17/cms17r0/pico/NanoAODv9/htozgamma_deathvalley_v2/2016/mc/skim_llg/pico_llg_ZGToLLG*.root',
+      '/net/cms17/cms17r0/pico/NanoAODv9/htozgamma_deathvalley_v2/2017/mc/skim_llg/pico_llg_DYJetsToLL*.root',
+      '/net/cms17/cms17r0/pico/NanoAODv9/htozgamma_deathvalley_v2/2017/mc/skim_llg/pico_llg_ZGToLLG*.root',
+      '/net/cms17/cms17r0/pico/NanoAODv9/htozgamma_deathvalley_v2/2018/mc/skim_llg/pico_llg_DYJetsToLL*.root',
+      '/net/cms17/cms17r0/pico/NanoAODv9/htozgamma_deathvalley_v2/2018/mc/skim_llg/pico_llg_ZGToLLG*.root'],
       cuts,
-      'train_kinbdt_idmva_nomasscut_bak.root',
+      'kinbdt_fullstats_bak.root',
       defines,
       'tree',
       branches)
 
-  
