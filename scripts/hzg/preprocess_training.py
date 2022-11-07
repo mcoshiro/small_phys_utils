@@ -59,10 +59,10 @@ if __name__=='__main__':
       'll_m.size()>0&&llphoton_m.size()>0',
       'stitch_dy||(type/1000!=6)',
       '(ll_m[0]>50)&&(photon_pt[0]/llphoton_m[0]>=15.0/110.0)&&((llphoton_m[0]+ll_m[0])>185)&&(photon_drmin[0]>0.4)',
-      '(ll_lepid[0]==11&&el_pt[ll_i1[0]]>25&&el_pt[ll_i2[0]]>15)||(ll_lepid[0]==13&&mu_pt[ll_i1[0]]>20&&mu_pt[ll_i2[0]]>10)']
+      '(ll_lepid[0]==11&&el_pt[ll_i1[0]]>25&&el_pt[ll_i2[0]]>15)||(ll_lepid[0]==13&&mu_pt[ll_i1[0]]>20&&mu_pt[ll_i2[0]]>10)',
       #'photon_idmva[0]>0.5',
-      #'llphoton_m[0]>122&&llphoton_m[0]<128']
-      #'photon_pt[0]<35']
+      'llphoton_m[0]>122&&llphoton_m[0]<128']
+      #'photon_pt[0]>=35']
   #defines = [('higgsdr','llphoton_dr[0]'),('higgspt','llphoton_pt[0]'),('zpt','ll_pt[0]'),('phpt','photon_pt[0]')]
   #branches = ('higgsdr','higgspt','zpt','phpt')
   defines = [('photon_mva','photon_idmva[0]'),
@@ -78,6 +78,7 @@ if __name__=='__main__':
              ('l2_rapidity','get_l2_rapidity(el_pt,el_eta,mu_pt,mu_eta,ll_lepid,ll_i1,ll_i2)'),
              ('photon_ptransverse','photon_pt[0]'),
              #('decorr_photon_pt','photon_pt[0]-0.207*llphoton_m[0]'),
+             ('mllg','llphoton_m[0]'),
              ('photon_pt_mass','photon_pt[0]/llphoton_m[0]')]
   branches = ('photon_mva','min_dR','max_dR','pt_mass','cosTheta','costheta',
       'phi','photon_res','photon_rapidity','l1_rapidity','l2_rapidity','photon_ptransverse','photon_pt_mass','w_lumi')
@@ -89,7 +90,7 @@ if __name__=='__main__':
       '/net/cms17/cms17r0/pico/NanoAODv9/htozgamma_deathvalley_v2/2017/mc/skim_llg/*HToZG*M-125*',
       '/net/cms17/cms17r0/pico/NanoAODv9/htozgamma_deathvalley_v2/2018/mc/skim_llg/*HToZG*M-125*'],
       cuts,
-      'kinbdt_fullstats_sig.root',
+      'kinbdt_narrowmasscut_sig.root',
       defines,
       'tree',
       branches)
@@ -100,7 +101,7 @@ if __name__=='__main__':
       '/net/cms17/cms17r0/pico/NanoAODv9/htozgamma_deathvalley_v2/2018/mc/skim_llg/pico_llg_DYJetsToLL*.root',
       '/net/cms17/cms17r0/pico/NanoAODv9/htozgamma_deathvalley_v2/2018/mc/skim_llg/pico_llg_ZGToLLG*.root'],
       cuts,
-      'kinbdt_fullstats_bak.root',
+      'kinbdt_narrowmasscut_bak.root',
       defines,
       'tree',
       branches)

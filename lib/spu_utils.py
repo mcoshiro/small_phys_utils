@@ -19,4 +19,3 @@ def get_filename_in_directory(filename):
   '''
   last_slash = filename.rfind('/')
   return filename[last_slash+1:]
-

@@ -6,7 +6,6 @@ Usage: shuffle_tree.py my_file.root tree
 
 The first argument is the filename, the second argument is the TTree name in the file
 """
-#todo: make macro so it auto-generates and executes ROOT file
 import os
 import ROOT
 import root_utils
