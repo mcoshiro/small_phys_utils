@@ -19,6 +19,12 @@ cd -
 #set up paths
 export SMALL_PHYS_UTILS_DIR=$(dirname $(readlink -e "$BASH_SOURCE"))
 export PATH=$SMALL_PHYS_UTILS_DIR/bin::$PATH
+export PATH=$SMALL_PHYS_UTILS_DIR/scripts::$PATH
 export PYTHONPATH=$SMALL_PHYS_UTILS_DIR/lib:$PYTHONPATH
 export LD_LIBRARY_PATH=$SMALL_PHYS_UTILS_DIR/lib:$LD_LIBRARY_PATH
 export ROOT_INCLUDE_PATH=$SMALL_PHYS_UTILS_DIR/inc:$ROOT_INCLUDE_PATH
+
+#set up newest root
+source /data1/jbkim/Linux/el7_v1/root-6.24.02/bin/thisroot.sh
+export LD_LIBRARY_PATH=/data1/jbkim/Linux/el7_v1/lib:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=/data1/jbkim/Linux/el7_v1/lib64:$LD_LIBRARY_PATH

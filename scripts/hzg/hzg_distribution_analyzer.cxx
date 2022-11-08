@@ -1,5 +1,6 @@
 /**
  * @brief Distribution analyzer driver script for H->Zgamma analysis
+ * Example usage:  root -l -q 'scripts/hzg/hzg_distribution_analyzer.cxx("../draw_pico/plots/zgboost_decorr__decorrbdt.root")'
  */
 #include <iostream>
 #include <string>
@@ -15,11 +16,14 @@
  *
  * 1 argument; filename of ROOT file with histogram from draw_pico
  */
-int main(int argc, char** argv) {
-  if (argc<2) {std::cout << "Insufficient arguments.\n"; return 1;}
+int hzg_distribution_analyzer(std::string filename) {
+  gSystem->AddIncludePath("-Iinc");
+  gSystem->AddLinkedLibs("-Llib -lSmallPhysUtils");
+
+  //if (argc<2) {std::cout << "Insufficient arguments.\n"; return 1;}
 
   //extract histograms from files, knowing draw_pico naming convention
-  TFile* file = TFile::Open(argv[1],"read");
+  TFile* file = TFile::Open(filename.c_str(),"read");
   TCanvas* canvas = static_cast<TCanvas*>(file->Get("canvas"));
   TH1D *bkg_1 = nullptr, *bkg_2 = nullptr, *signal = nullptr;
   bool found_bkg_1 = false;

@@ -36,8 +36,9 @@ void get_roc_auc(TH1D* signal, TH1D* background) {
       prev_bkg = bkg_accepted;
       prev_sig = sig_accepted;
     }
+    std::cout << "CSI = Continuous significance improvement (approximation to significance improvement)." << std::endl;
     std::cout << "ROC AUC is: " << integrated_area << std::endl;
-    std::cout << "Continuous approximate significance improvement is: " << sqrt(casi) << std::endl;
+    std::cout << "ROC CSI is: " << sqrt(casi) << std::endl;
 }
 
 /**
@@ -57,7 +58,7 @@ void binning_optimizer(TH1D* signal, TH1D* background, int max_nbins,
     if (nbins < 2) {
       float bin_s = signal->Integral()*scale;
       float bin_b = background->Integral()*scale;
-      std::cout << "Optimal cuts(sig,bak): no cuts(" << bin_s << "," << bin_b << ")" << std::endl;
+      std::cout << "Optimal cuts(sig,bak): -1.1(" << bin_s << "," << bin_b << ")" << std::endl;
       std::cout << "Estimated significance: " << bin_s/sqrt(bin_b) << std::endl;
       continue;
     }
