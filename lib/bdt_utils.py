@@ -19,6 +19,8 @@ class BdtOptions:
     self.MinNodeSize = 2.5
     self.MaxDepth = 3
     self.AdaBoostBeta = 0.5
+    self.Shrinkage = 0.1
+    self.BoostType = 'AdaBoost'
 
   def ptat_string(self):
     '''Return option to be given to DataLoader::PrepareTrainingAndTestTree
@@ -38,9 +40,36 @@ class BdtOptions:
     ret = '!H:!V:NTrees='+str(self.NTrees)
     ret += ':MinNodeSize='+str(self.MinNodeSize)
     ret += '%:MaxDepth='+str(self.MaxDepth)
-    ret += ':BoostType=AdaBoost:AdaBoostBeta='+str(self.AdaBoostBeta)
+    ret += ':BoostType='+self.BoostType
+    if (self.BoostType=='AdaBoost'):
+      ret += ':AdaBoostBeta='+str(self.AdaBoostBeta)
+    elif (self.BoostType=='Grad'):
+      ret += ':Shrinkage='+str(self.Shrinkage)
+    else:
+      raise TypeError('Unknown BDT BoostType')
     ret += ':UseBaggedBoost:BaggedSampleFraction=0.5:SeparationType=GiniIndex:nCuts=20'
     return ret
+
+class BdtSummary:
+  '''Class to hold summary of BDT performance
+  '''
+  def __init__(self):
+    self.auc_train = 0
+    self.auc_tests = 0
+    self.csi_train = 0
+    self.csi_tests = 0
+    self.bn4_signif = 0
+    self.bn1_signif = 0
+    self.sig_ks = 0
+    self.bak_ks = 0
+
+  def print_summary(self):
+    '''Print digest of BDT results
+    '''
+    print('AUC (train/test): '+str(self.auc_train)+'/'+str(self.auc_tests))
+    print('CSI (train/test): '+str(self.csi_train)+'/'+str(self.csi_tests))
+    print('4 bin sig (train+test): '+str(self.bn4_signif)+' ('+str(self.bn4_signif/self.bn1_signif-1.0)+'%impovement)')
+    print('K-S p-value (sig/bak): '+str(self.sig_ks)+'/'+str(self.bak_ks))
 
 def train_bdt(base_name, variables, weight, options, output_suffix=''):
   '''Function that trains a BDT
@@ -57,7 +86,6 @@ def train_bdt(base_name, variables, weight, options, output_suffix=''):
   sig_input_file = ROOT.TFile('ntuples/'+base_name+'_sig.root','READ')
   bak_input_file = ROOT.TFile('ntuples/'+base_name+'_bak.root','READ')
   output_file = ROOT.TFile('ntuples/output_'+base_name+output_suffix+'.root','RECREATE') 
-  #TODO incorporate options into output filename
   bdt_factory = ROOT.TMVA.Factory(base_name+output_suffix,output_file,
       '!V:ROC:!Correlations:!Silent:Color:!DrawProgressBar:AnalysisType=Classification')
   bdt_loader = ROOT.TMVA.DataLoader('dataset')
@@ -78,19 +106,199 @@ def train_bdt(base_name, variables, weight, options, output_suffix=''):
   bdt_factory.EvaluateAllMethods()
   output_file.Close()
 
-def evaluate_bdt(base_name, variables, weight, output_suffix=''):
+def evaluate_bdt(base_name, variables, weight, options, output_suffix=''):
   '''Function that evaluates various metrics related to a BDT
+  Note: ASSUMES BLOCK SPLITTING IS USED
 
   @params
   base_name - filename of training samples, see train_bdt
   variables - list of variables used in BDT
   weight - name of weight branch
+  options - BdtOptions with options used for training
   output_suffix - tag for output file
+
+  @returns
+  a BdtSummary of performance statistics
   '''
-  variables.append(weight)
-  variable_types = root_utils.get_column_types(variables,'ntuples/'+base_name+'_sig.root','tree')
-  columns = [(variables[i],variable_types[i]) for i in range(len(variables))]
+  variables_aug = variables+[weight]
+  variable_types = root_utils.get_column_types(variables_aug,'ntuples/'+base_name+'_sig.root','tree')
+  columns = [(variables_aug[i], variable_types[i]) for i in range(len(variables_aug))]
   out_file = open('bdt_evaluate_macro.cxx','w')
+  write_event_loop_boilerplate(out_file, base_name, columns, weight, output_suffix)
+  out_file.write('  //Set up histograms\n')
+  out_file.write('  TH1D hist_sig("hist_sig","BDT Output",110,-1.1,1.1);\n')
+  out_file.write('  TH1D hist_bak("hist_bak","BDT Output",110,-1.1,1.1);\n')
+  out_file.write('  TH1D hist_train_sig("hist_train_sig","BDT Output",110,-1.1,1.1);\n')
+  out_file.write('  TH1D hist_train_bak("hist_train_bak","BDT Output",110,-1.1,1.1);\n')
+  out_file.write('  TH1D hist_tests_sig("hist_tests_sig","BDT Output",110,-1.1,1.1);\n')
+  out_file.write('  TH1D hist_tests_bak("hist_tests_bak","BDT Output",110,-1.1,1.1);\n')
+  out_file.write('  //Set up histograms\n')
+  out_file.write('\n')
+  out_file.write('  //Perform event loops\n')
+  if (options.nTrain_Signal == 0):
+    out_file.write('  long ntrain = (sig_tree->GetEntries())/2;\n')
+  else:
+    out_file.write('  long ntrain = '+str(options.nTrain_Signal)+';\n')
+  out_file.write('  for (long ievt = 0; ievt < sig_tree->GetEntries(); ievt++) {\n')
+  out_file.write('    sig_tree->GetEntry(ievt);\n')
+  out_file.write('    Float_t BDT = bdt_reader.EvaluateMVA("BDT");\n')
+  out_file.write('    if (ievt < ntrain) {\n')
+  out_file.write('      hist_train_sig.Fill(BDT,'+weight+');\n')
+  out_file.write('    }\n')
+  out_file.write('    else {\n')
+  out_file.write('      hist_tests_sig.Fill(BDT,'+weight+');\n')
+  out_file.write('    }\n')
+  out_file.write('  }\n')
+  if (options.nTrain_Background == 0):
+    out_file.write('  ntrain = (bak_tree->GetEntries())/2;\n')
+  else:
+    out_file.write('  ntrain = '+str(options.nTrain_Background)+';\n')
+  out_file.write('  for (long ievt = 0; ievt < bak_tree->GetEntries(); ievt++) {\n')
+  out_file.write('    bak_tree->GetEntry(ievt);\n')
+  out_file.write('    Float_t BDT = bdt_reader.EvaluateMVA("BDT");\n')
+  out_file.write('    if (ievt < ntrain) {\n')
+  out_file.write('      hist_train_bak.Fill(BDT,'+weight+');\n')
+  out_file.write('    }\n')
+  out_file.write('    else {\n')
+  out_file.write('      hist_tests_bak.Fill(BDT,'+weight+');\n')
+  out_file.write('    }\n')
+  out_file.write('  }\n')
+  out_file.write('\n')
+  out_file.write('  //add histograms\n')
+  out_file.write('  hist_sig.Add(&hist_train_sig);\n')
+  out_file.write('  hist_sig.Add(&hist_tests_sig);\n')
+  out_file.write('  hist_bak.Add(&hist_train_bak);\n')
+  out_file.write('  hist_bak.Add(&hist_tests_bak);\n')
+  out_file.write('\n')
+  out_file.write('  //get ouput\n')
+  out_file.write('  get_roc_auc(&hist_sig, &hist_bak);\n')
+  out_file.write('  get_roc_auc(&hist_train_sig, &hist_train_bak);\n')
+  out_file.write('  get_roc_auc(&hist_tests_sig, &hist_tests_bak);\n')
+  out_file.write('  std::cout << "Sig KS p: " << hist_tests_sig.KolmogorovTest(&hist_train_sig) << "\\n";\n')
+  out_file.write('  std::cout << "Bak KS p: " << hist_tests_bak.KolmogorovTest(&hist_train_bak) << "\\n";\n')
+  out_file.write('  binning_optimizer(&hist_sig, &hist_bak,5,1.5,138.0/3.0);\n')
+  out_file.write('  binning_optimizer(&hist_train_sig, &hist_train_bak,5,1.5,2.0*138.0/3.0);\n')
+  out_file.write('  binning_optimizer(&hist_tests_sig, &hist_tests_bak,5,1.5,2.0*138.0/3.0);\n')
+  out_file.write('}\n')
+  out_file.close()
+  #run ROOT macro and parse output to get statistics and yields
+  bdt_summary = BdtSummary()
+  process_result = subprocess.run('root -l -q bdt_evaluate_macro.cxx'.split(),capture_output=True)
+  print(process_result.stdout)
+  print(process_result.stderr)
+  evaluate_lines = (process_result.stdout.decode('utf-8')).split('\n')
+  auc_counter = 0
+  csi_counter = 0
+  for line in evaluate_lines:
+    if line[:12] == 'ROC AUC is: ':
+      if (auc_counter==1):
+        bdt_summary.auc_train = float(line[12:])
+      elif (auc_counter==2):
+        bdt_summary.auc_tests = float(line[12:])
+      auc_counter += 1
+    if line[:12] == 'ROC CSI is: ':
+      if (csi_counter==1):
+        bdt_summary.csi_train = float(line[12:])
+      elif (csi_counter==2):
+        bdt_summary.csi_tests = float(line[12:])
+      csi_counter += 1
+    if line[:10] == 'Sig KS p: ':
+      bdt_summary.sig_ks = float(line[10:])
+    if line[:10] == 'Bak KS p: ':
+      bdt_summary.bak_ks = float(line[10:])
+  #get yields, make datacard, and run through combine
+  bin1_yields = get_yields_from_binning_optimizer(evaluate_lines, 1)
+  bin4_yields = get_yields_from_binning_optimizer(evaluate_lines, 4)
+  bin4_cuts = get_cuts_from_binning_optimizer(evaluate_lines, 4)
+  print(bin4_cuts)
+  make_simple_datacard.make_simple_datacard('temp_datacard.txt',bin1_yields[0],bin1_yields[1])
+  evaluate_lines = ((subprocess.run('./scripts/combine_anyenv.py temp_datacard.txt -M Significance'.split(),capture_output=True)).stdout.decode('utf-8')).split('\n')
+  for line in evaluate_lines:
+    if line[:14] == 'Significance: ':
+      bdt_summary.bn1_signif = float(line[14:])
+  subprocess.run('rm temp_datacard.txt'.split())
+  make_simple_datacard.make_simple_datacard('temp_datacard.txt',bin4_yields[0],bin4_yields[1])
+  evaluate_lines = ((subprocess.run('./scripts/combine_anyenv.py temp_datacard.txt -M Significance'.split(),capture_output=True)).stdout.decode('utf-8')).split('\n')
+  for line in evaluate_lines:
+    if line[:14] == 'Significance: ':
+      bdt_summary.bn4_signif = float(line[14:])
+  subprocess.run('rm temp_datacard.txt'.split())
+  #make variable plots
+  print('Making BDT distributions')
+  subprocess.run('rm bdt_evaluate_macro.cxx'.split())
+  out_file = open('bdt_evaluate_macro.cxx','w')
+  write_event_loop_boilerplate(out_file, base_name, columns, weight, output_suffix)
+  out_file.write('  ')
+  out_file.write('  //set ranges\n')
+  for column in columns:
+    if (column[0] != weight):
+      out_file.write('  '+root_utils.get_cpp_type(column[1])+' max_'+column[0]+' = -999999999;\n');
+      out_file.write('  '+root_utils.get_cpp_type(column[1])+' min_'+column[0]+' = 999999999;\n');
+  out_file.write('  long sample_nevts = sig_tree->GetEntries();\n')
+  out_file.write('  sample_nevts = sample_nevts<1000 ? sample_nevts : 1000;\n')
+  out_file.write('  for (long ievt = 0; ievt < sample_nevts; ievt++) {\n')
+  out_file.write('    sig_tree->GetEntry(ievt);\n')
+  for column in columns:
+    if (column[0] != weight):
+      out_file.write('    if ('+column[0]+'>max_'+column[0]+')\n')
+      out_file.write('      max_'+column[0]+' = '+column[0]+';\n')
+      out_file.write('    if ('+column[0]+'<min_'+column[0]+')\n')
+      out_file.write('      min_'+column[0]+' = '+column[0]+';\n')
+  out_file.write('  }\n')
+  out_file.write('  ')
+  out_file.write('  //Set up histograms\n')
+  for column in columns:
+    if (column[0] != weight):
+      for mva_bin in range(4):
+        out_file.write('  TH1D hist_sig_'+column[0]+str(mva_bin)+'("hist_sig_'+column[0]+str(mva_bin)+'","'+column[0]+'",30,min_'+column[0]+',max_'+column[0]+');\n')
+        out_file.write('  TH1D hist_bak_'+column[0]+str(mva_bin)+'("hist_bak_'+column[0]+str(mva_bin)+'","'+column[0]+'",30,min_'+column[0]+',max_'+column[0]+');\n')
+  out_file.write('\n')
+  out_file.write('  //Perform event loops\n')
+  for category in ['sig','bak']:
+    out_file.write('  for (long ievt = 0; ievt < '+category+'_tree->GetEntries(); ievt++) {\n')
+    out_file.write('    '+category+'_tree->GetEntry(ievt);\n')
+    out_file.write('    Float_t BDT = bdt_reader.EvaluateMVA("BDT");\n')
+    for ibin in range(len(bin4_cuts)-1):
+      out_file.write('    if (BDT > '+str(bin4_cuts[ibin])+' and BDT < '+str(bin4_cuts[ibin+1])+') {\n')
+      for column in columns:
+        if (column[0] != weight):
+          out_file.write('      hist_'+category+'_'+column[0]+str(ibin)+'.Fill('+column[0]+','+weight+');\n')
+      out_file.write('    }\n')
+    out_file.write('  }\n')
+  out_file.write('\n')
+  out_file.write('  //draw histograms and write to file\n')
+  mva_colors = ['kRed','kGreen','kBlue','kViolet']
+  for category in ['sig','bak']:
+    for column in columns:
+      if (column[0] != weight):
+        out_file.write('  TCanvas can_'+category+'_'+column[0]+';\n')
+        for mva_bin in range(4):
+          hist_name = 'hist_'+category+'_'+column[0]+str(mva_bin)
+          out_file.write('  '+hist_name+'.SetLineColor('+mva_colors[mva_bin]+');\n')
+          out_file.write('  '+hist_name+'.Scale(1.0/'+hist_name+'.Integral());\n')
+          if (mva_bin==0):
+            out_file.write('  '+hist_name+'.GetYaxis()->SetRangeUser(0.0,3.5*'+hist_name+'.GetMaximum());\n')
+            out_file.write('  '+hist_name+'.Draw();\n')
+          else:
+            out_file.write('  '+hist_name+'.Draw("SAME");\n')
+        out_file.write('  can_'+category+'_'+column[0]+'.Print("dataset/plots/'+base_name+output_suffix+'_'+category+'_'+column[0]+'.pdf");\n')
+  out_file.write('}\n')
+  out_file.close()
+  subprocess.run('root -l -q bdt_evaluate_macro.cxx'.split())
+  subprocess.run('rm bdt_evaluate_macro.cxx'.split())
+  return bdt_summary
+
+def write_event_loop_boilerplate(out_file, base_name, columns, weight, output_suffix):
+  '''Helper function for writing event loop boilerplate
+
+  @params
+  out_file - file to write output to
+  base_name - base filename
+  columns - list of tuples of column names and types
+  weight - name of weight column
+  output_suffix - tag for BDT
+  '''
+  #left off fixing this function
   out_file.write('#include "distribution_analyzer.hpp"\n')
   out_file.write('\n')
   out_file.write('void bdt_evaluate_macro() {\n')
@@ -115,70 +323,45 @@ def evaluate_bdt(base_name, variables, weight, output_suffix=''):
   out_file.write('  bdt_reader.BookMVA("BDT","dataset/weights/'+base_name
       +output_suffix+'_BDT.weights.xml");\n')
   out_file.write('\n')
-  out_file.write('  //Set up histograms\n')
-  out_file.write('  TH1D hist_sig("hist_sig","BDT Output",110,-1.1,1.1);\n')
-  out_file.write('  TH1D hist_bak("hist_bak","BDT Output",110,-1.1,1.1);\n')
-  out_file.write('  TH1D hist_train_sig("hist_train_sig","BDT Output",110,-1.1,1.1);\n')
-  out_file.write('  TH1D hist_train_bak("hist_train_bak","BDT Output",110,-1.1,1.1);\n')
-  out_file.write('  TH1D hist_tests_sig("hist_tests_sig","BDT Output",110,-1.1,1.1);\n')
-  out_file.write('  TH1D hist_tests_bak("hist_tests_bak","BDT Output",110,-1.1,1.1);\n')
-  out_file.write('\n')
-  out_file.write('  //Perform event loops\n')
-  out_file.write('  long half_evts = (sig_tree->GetEntries())/2;\n')
-  out_file.write('  for (long ievt = 0; ievt < sig_tree->GetEntries(); ievt++) {\n')
-  out_file.write('    sig_tree->GetEntry(ievt);\n')
-  out_file.write('    Float_t BDT = bdt_reader.EvaluateMVA("BDT");\n')
-  out_file.write('    if (ievt < half_evts) {\n')
-  out_file.write('      hist_train_sig.Fill(BDT,'+weight+');\n')
-  out_file.write('    }\n')
-  out_file.write('    else {\n')
-  out_file.write('      hist_tests_sig.Fill(BDT,'+weight+');\n')
-  out_file.write('    }\n')
-  out_file.write('  }\n')
-  out_file.write('  half_evts = (bak_tree->GetEntries())/2;\n')
-  out_file.write('  for (long ievt = 0; ievt < bak_tree->GetEntries(); ievt++) {\n')
-  out_file.write('    bak_tree->GetEntry(ievt);\n')
-  out_file.write('    Float_t BDT = bdt_reader.EvaluateMVA("BDT");\n')
-  out_file.write('    if (ievt < half_evts) {\n')
-  out_file.write('      hist_train_bak.Fill(BDT,'+weight+');\n')
-  out_file.write('    }\n')
-  out_file.write('    else {\n')
-  out_file.write('      hist_tests_bak.Fill(BDT,'+weight+');\n')
-  out_file.write('    }\n')
-  out_file.write('  }\n')
-  out_file.write('\n')
-  out_file.write('  //add histograms\n')
-  out_file.write('  hist_sig.Add(&hist_train_sig);\n')
-  out_file.write('  hist_sig.Add(&hist_tests_sig);\n')
-  out_file.write('  hist_bak.Add(&hist_train_bak);\n')
-  out_file.write('  hist_bak.Add(&hist_tests_bak);\n')
-  out_file.write('\n')
-  out_file.write('  //get ouput\n')
-  out_file.write('  get_roc_auc(&hist_sig, &hist_bak);\n')
-  out_file.write('  get_roc_auc(&hist_train_sig, &hist_train_bak);\n')
-  out_file.write('  get_roc_auc(&hist_tests_sig, &hist_tests_bak);\n')
-  out_file.write('  std::cout << "Signal KS p-value:" << hist_tests_sig.KolmogorovTest(&hist_train_sig) << "\\n";\n')
-  out_file.write('  std::cout << "Background KS p-value:" << hist_tests_bak.KolmogorovTest(&hist_train_bak) << "\\n";\n')
-  out_file.write('  binning_optimizer(&hist_sig, &hist_bak,5,1.5,138.0/3.0);\n')
-  out_file.write('}\n')
-  out_file.close()
-  #run ROOT macro and parse output to get yields
-  evaluate_lines = ((subprocess.run('root -l -q bdt_evaluate_macro.cxx'.split(),capture_output=True)).stdout.decode('utf-8')).split('\n')
-  yields_line = evaluate_lines[evaluate_lines.index('With 4 bins: ')+1]
+
+def get_yields_from_binning_optimizer(captured_text, nbins):
+  '''Helper function to extract yields from binning_optimizer print-out
+
+  @params
+  captured_text - stdout from bdt_evaluation_macro
+  nbins - number of bins to consider
+  '''
+  yields_line = captured_text[captured_text.index('With '+str(nbins)+' bins: ')+1]
   paren_idx = yields_line.index('(')
   sig_yields = []
   bak_yields = []
-  for i in range(4):
+  for i in range(nbins):
     paren_idx = yields_line.index('(',paren_idx+1)
     comma_idx = yields_line.index(',',paren_idx+1)
     close_idx = yields_line.index(')',paren_idx+1)
     sig_yields.append(float(yields_line[paren_idx+1:comma_idx]))
     bak_yields.append(float(yields_line[comma_idx+1:close_idx]))
-  make_simple_datacard.make_simple_datacard('temp_datacard.txt',sig_yields,bak_yields)
-  subprocess.run('./scripts/combine_anyenv.py temp_datacard.txt -M Significance'.split())
-  subprocess.run('rm bdt_evaluate_macro.cxx'.split())
-  subprocess.run('rm temp_datacard.txt'.split())
+  return (sig_yields, bak_yields)
 
+def get_cuts_from_binning_optimizer(captured_text, nbins):
+  '''Helper function to extract cuts from binning_optimizer print-out
+
+  @params
+  captured_text - stdout from bdt_evaluation_macro
+  nbins - number of bins to consider
+  '''
+  yields_line = captured_text[captured_text.index('With '+str(nbins)+' bins: ')+1]
+  comma_idx = yields_line.index(':')
+  cuts = []
+  for i in range(nbins-1):
+    paren_idx = yields_line.index('(',comma_idx+1)
+    cuts.append(float(yields_line[comma_idx+2:paren_idx]))
+    comma_idx = yields_line.index(',',comma_idx+1)
+    comma_idx = yields_line.index(',',comma_idx+1)
+  paren_idx = yields_line.index('(',comma_idx+1)
+  cuts.append(float(yields_line[comma_idx+2:paren_idx]))
+  cuts.append(1.1)
+  return cuts
 
 def clean_bdt(base_name, output_suffix=''):
   '''Function to clean up after BDT training
