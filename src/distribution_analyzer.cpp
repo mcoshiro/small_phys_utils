@@ -138,3 +138,48 @@ void binning_optimizer(TH1D* signal, TH1D* background, int max_nbins,
     std::cout << "Estimated significance: " << max_significance << std::endl;
   }
 }
+
+/**
+ * @brief Function to find optimized cut for a histogram
+ *
+ * @param signal            pointer to ROOT histogram of signal
+ * @param background        pointer to ROOT histogram of background
+ * @param min_signal_yield  minimum signal yield allowed after cut
+ * @param cut_is_upper      if the cut is a lower bound or an upper bound
+ * @param scale             scale factor for signal and background to change effective lumi
+ */
+void cut_optimizer(TH1D* signal, TH1D* background,
+    float min_signal_yield, bool cut_is_upper, float scale) {
+  int hist_nbins = signal->GetNbinsX();
+  float max_significance = 0;
+  int max_sig_cut = 0;
+  //convention: cuts are specified as lowest histogram bin in upper binning
+  //loop over all possible combinations of cuts to find optimum 
+  if (!cut_is_upper) {
+    for (int cut = 0; cut < hist_nbins; cut++) {
+      float cut_s = signal->Integral(cut,hist_nbins+1)*scale;
+      float cut_b = background->Integral(cut,hist_nbins+1)*scale;
+      if (cut_s < min_signal_yield) continue;
+      float significance = cut_s/sqrt(cut_b);
+      if (significance > max_significance) {
+        max_significance = significance;
+        max_sig_cut = cut;
+      }
+    }
+  }
+  if (cut_is_upper) {
+    for (int cut = hist_nbins; cut > 0; cut--) {
+      float cut_s = signal->Integral(0,cut)*scale;
+      float cut_b = background->Integral(0,cut)*scale;
+      if (cut_s < min_signal_yield) continue;
+      float significance = cut_s/sqrt(cut_b);
+      if (significance > max_significance) {
+        max_significance = significance;
+        max_sig_cut = cut;
+      }
+    }
+  }
+  //print optimal cuts
+  std::cout << "Optimal cut: " << signal->GetBinLowEdge(max_sig_cut) << std::endl;
+  std::cout << "Estimated significance: " << max_significance << std::endl;
+}

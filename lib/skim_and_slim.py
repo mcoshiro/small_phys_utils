@@ -10,8 +10,9 @@ def write_ntuples(filenames, cuts, out_name, defines=[], tree_name='tree', branc
   filenames - list of filenames of ROOT n-tuples
   cuts - list of cuts expressed as strings in order they should be applied
   out_name - output filename of n-tuple
-  defines - list of 2-tuples describing new branches to define in the format (name, expr)
-            note that these must be defineable before cuts
+  defines - list of 2-tuples or 3-tuples describing new branches to define in 
+            the format (name, expr) or (name, expr, columns). note that these 
+            must be defineable before cuts
   tree_name - name of tree in ROOT file
   branches - tuple of branches to save; if empty all branches are saved
   '''
@@ -20,11 +21,14 @@ def write_ntuples(filenames, cuts, out_name, defines=[], tree_name='tree', branc
     filenames_vec.push_back(filename)
   df = ROOT.RDataFrame('tree',filenames_vec)
   for define in defines:
-    df = df.Define(define[0],define[1])
+    if len(define)==2:
+      df = df.Define(define[0],define[1])
+    else:
+      df = df.Define(define[0],define[1],define[2])
   for cut in cuts:
     df = df.Filter(cut)
   if (branches == ()):
-    df.Snapshot(tree_name,'ntuples/'+out_name)
+    df.Snapshot(tree_name,'ntuples/'+out_name,'')
   else:
     df.Snapshot(tree_name,'ntuples/'+out_name,branches)
   print('Wrote ntuples/'+out_name)

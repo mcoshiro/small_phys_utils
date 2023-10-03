@@ -106,6 +106,105 @@ def train_bdt(base_name, variables, weight, options, output_suffix=''):
   bdt_factory.EvaluateAllMethods()
   output_file.Close()
 
+#TODO: maybe change this so it can be combined with evaluate_bdt to avoid duplication
+def optimize_binning(base_name, variables, weight, options, output_suffix='', mva_base_name='',nbins_max=4,min_evts=1.5,lumi_multiplier=1.0):
+  '''Prints optimized binning for BDT given input ROOT file
+
+  @params
+  base_name - filename of training samples, see train_bdt
+  variables - list of variables used in BDT
+  weight - name of weight branch
+  options - BdtOptions with options used for training
+  output_suffix - tag for output file
+  mva_base_name - filename used for evaluation
+  nbins_max - maximum number of bins
+  min_evts - minimum number of events per category
+  lumi_multiplier - multiplier for luminosity
+  '''
+  if (mva_base_name == ''):
+    mva_base_name = base_name
+  variables_aug = variables+[weight]
+  variable_types = root_utils.get_column_types(variables_aug,'ntuples/'+base_name+'_sig.root','tree')
+  columns = [(variables_aug[i], variable_types[i]) for i in range(len(variables_aug))]
+  out_file = open('bdt_evaluate_macro.cxx','w')
+  write_event_loop_boilerplate(out_file, base_name, columns, weight, output_suffix, mva_base_name)
+  out_file.write('  //Set up histograms\n')
+  out_file.write('  TH1D hist_sig("hist_sig","BDT Output",110,-1.1,1.1);\n')
+  out_file.write('  TH1D hist_bak("hist_bak","BDT Output",110,-1.1,1.1);\n')
+  out_file.write('  //Set up histograms\n')
+  out_file.write('\n')
+  out_file.write('  //Perform event loops\n')
+  out_file.write('  for (long ievt = 0; ievt < sig_tree->GetEntries(); ievt++) {\n')
+  out_file.write('    sig_tree->GetEntry(ievt);\n')
+  out_file.write('    Float_t BDT = bdt_reader.EvaluateMVA("BDT");\n')
+  out_file.write('    hist_sig.Fill(BDT,'+weight+');\n')
+  out_file.write('  }\n')
+  out_file.write('  for (long ievt = 0; ievt < bak_tree->GetEntries(); ievt++) {\n')
+  out_file.write('    bak_tree->GetEntry(ievt);\n')
+  out_file.write('    Float_t BDT = bdt_reader.EvaluateMVA("BDT");\n')
+  out_file.write('    hist_bak.Fill(BDT,'+weight+');\n')
+  out_file.write('  }\n')
+  out_file.write('\n')
+  out_file.write('  //get ouput\n')
+  out_file.write('  get_roc_auc(&hist_sig, &hist_bak);\n')
+  out_file.write('  binning_optimizer(&hist_sig, &hist_bak,'+str(nbins_max+1)+','+str(min_evts)+','+str(lumi_multiplier)+');\n')
+  out_file.write('}\n')
+  out_file.close()
+  #run ROOT macro and parse output to get statistics and yields
+  process_result = subprocess.run('root -l -q bdt_evaluate_macro.cxx'.split())
+  subprocess.run('rm bdt_evaluate_macro.cxx'.split())
+
+def make_bdt_friend_ttree(base_name, variables, weight, options, output_suffix='', mva_base_name=''):
+  '''Makes a friend TTree with BDT score
+  
+  Prints optimized binning for BDT given input ROOT file
+
+  @params
+  base_name - filename of training samples, see train_bdt
+  variables - list of variables used in BDT
+  weight - name of weight branch
+  options - BdtOptions with options used for training
+  output_suffix - tag for output file
+  mva_base_name - filename used for evaluation
+  '''
+  if (mva_base_name == ''):
+    mva_base_name = base_name
+  variables_aug = variables+[weight]
+  variable_types = root_utils.get_column_types(variables_aug,'ntuples/'+base_name+'_sig.root','tree')
+  columns = [(variables_aug[i], variable_types[i]) for i in range(len(variables_aug))]
+  out_file = open('bdt_evaluate_macro.cxx','w')
+  write_event_loop_boilerplate(out_file, base_name, columns, weight, output_suffix, mva_base_name)
+  out_file.write('  Float_t BDT = 0;\n')
+  out_file.write('\n')
+  out_file.write('  //Write signal event loop\n')
+  out_file.write('  TFile* sig_out_file = new TFile("ntuples/'+base_name+'_sig_bdtscore.root","RECREATE");\n')
+  out_file.write('  TTree * sig_out_tree = new TTree("tree","tree");\n')
+  out_file.write('  sig_out_tree->Branch("bdt_score",&BDT,"bdt_score/F");\n')
+  out_file.write('  for (long ievt = 0; ievt < sig_tree->GetEntries(); ievt++) {\n')
+  out_file.write('    sig_tree->GetEntry(ievt);\n')
+  out_file.write('    BDT = bdt_reader.EvaluateMVA("BDT");\n')
+  out_file.write('    sig_out_tree->Fill();\n')
+  out_file.write('  }\n')
+  out_file.write('  sig_out_tree->Write();\n')
+  out_file.write('  sig_out_file->Close();\n')
+  out_file.write('\n')
+  out_file.write('  TFile* bak_out_file = new TFile("ntuples/'+base_name+'_bak_bdtscore.root","RECREATE");\n')
+  out_file.write('  TTree * bak_out_tree = new TTree("tree","tree");\n')
+  out_file.write('  bak_out_tree->Branch("bdt_score",&BDT,"bdt_score/F");\n')
+  out_file.write('  //Write background event loop\n')
+  out_file.write('  for (long ievt = 0; ievt < bak_tree->GetEntries(); ievt++) {\n')
+  out_file.write('    bak_tree->GetEntry(ievt);\n')
+  out_file.write('    BDT = bdt_reader.EvaluateMVA("BDT");\n')
+  out_file.write('    bak_out_tree->Fill();\n')
+  out_file.write('  }\n')
+  out_file.write('  bak_out_tree->Write();\n')
+  out_file.write('  bak_out_file->Close();\n')
+  out_file.write('}\n')
+  out_file.close()
+  #run ROOT macro and parse output to get statistics and yields
+  process_result = subprocess.run('root -l -q bdt_evaluate_macro.cxx'.split())
+  subprocess.run('rm bdt_evaluate_macro.cxx'.split())
+
 def evaluate_bdt(base_name, variables, weight, options, output_suffix=''):
   '''Function that evaluates various metrics related to a BDT
   Note: ASSUMES BLOCK SPLITTING IS USED
@@ -176,9 +275,11 @@ def evaluate_bdt(base_name, variables, weight, options, output_suffix=''):
   out_file.write('  get_roc_auc(&hist_tests_sig, &hist_tests_bak);\n')
   out_file.write('  std::cout << "Sig KS p: " << hist_tests_sig.KolmogorovTest(&hist_train_sig) << "\\n";\n')
   out_file.write('  std::cout << "Bak KS p: " << hist_tests_bak.KolmogorovTest(&hist_train_bak) << "\\n";\n')
-  out_file.write('  binning_optimizer(&hist_sig, &hist_bak,5,1.5,138.0/3.0);\n')
-  out_file.write('  binning_optimizer(&hist_train_sig, &hist_train_bak,5,1.5,2.0*138.0/3.0);\n')
-  out_file.write('  binning_optimizer(&hist_tests_sig, &hist_tests_bak,5,1.5,2.0*138.0/3.0);\n')
+  out_file.write('  binning_optimizer(&hist_sig, &hist_bak,5,1.5,1.0);\n')
+  out_file.write('  //add factor of 2 since we are using train/test set only\n')
+  out_file.write('  binning_optimizer(&hist_train_sig, &hist_train_bak,5,1.5,2.0);\n')
+  out_file.write('  binning_optimizer(&hist_tests_sig, &hist_tests_bak,5,1.5,2.0);\n')
+  out_file.write('  cut_optimizer(&hist_tests_sig, &hist_tests_bak,0.5,false,2.0);\n')
   out_file.write('}\n')
   out_file.close()
   #run ROOT macro and parse output to get statistics and yields
@@ -208,8 +309,8 @@ def evaluate_bdt(base_name, variables, weight, options, output_suffix=''):
       bdt_summary.bak_ks = float(line[10:])
   #get yields, make datacard, and run through combine
   bin1_yields = get_yields_from_binning_optimizer(evaluate_lines, 1)
-  bin4_yields = get_yields_from_binning_optimizer(evaluate_lines, 4)
-  bin4_cuts = get_cuts_from_binning_optimizer(evaluate_lines, 4)
+  bin4_yields = get_yields_from_binning_optimizer(evaluate_lines, 4, 3)
+  bin4_cuts = get_cuts_from_binning_optimizer(evaluate_lines, 4, 3)
   print(bin4_cuts)
   make_simple_datacard.make_simple_datacard('temp_datacard.txt',bin1_yields[0],bin1_yields[1])
   evaluate_lines = ((subprocess.run('./scripts/combine_anyenv.py temp_datacard.txt -M Significance'.split(),capture_output=True)).stdout.decode('utf-8')).split('\n')
@@ -288,7 +389,7 @@ def evaluate_bdt(base_name, variables, weight, options, output_suffix=''):
   subprocess.run('rm bdt_evaluate_macro.cxx'.split())
   return bdt_summary
 
-def write_event_loop_boilerplate(out_file, base_name, columns, weight, output_suffix):
+def write_event_loop_boilerplate(out_file, base_name, columns, weight, output_suffix, mva_base_name=''):
   '''Helper function for writing event loop boilerplate
 
   @params
@@ -298,7 +399,8 @@ def write_event_loop_boilerplate(out_file, base_name, columns, weight, output_su
   weight - name of weight column
   output_suffix - tag for BDT
   '''
-  #left off fixing this function
+  if (mva_base_name==''):
+    mva_base_name = base_name
   out_file.write('#include "distribution_analyzer.hpp"\n')
   out_file.write('\n')
   out_file.write('void bdt_evaluate_macro() {\n')
@@ -320,18 +422,23 @@ def write_event_loop_boilerplate(out_file, base_name, columns, weight, output_su
       out_file.write('  bak_tree->SetBranchAddress("'+column[0]+'", &'+column[0]+');\n');
       if (column[0] != weight):
         out_file.write('  bdt_reader.AddVariable("'+column[0]+'", &'+column[0]+');\n')
-  out_file.write('  bdt_reader.BookMVA("BDT","dataset/weights/'+base_name
+  out_file.write('  bdt_reader.BookMVA("BDT","dataset/weights/'+mva_base_name
       +output_suffix+'_BDT.weights.xml");\n')
   out_file.write('\n')
 
-def get_yields_from_binning_optimizer(captured_text, nbins):
+def get_yields_from_binning_optimizer(captured_text, nbins, nth=1):
   '''Helper function to extract yields from binning_optimizer print-out
 
   @params
   captured_text - stdout from bdt_evaluation_macro
   nbins - number of bins to consider
+  nth - int, find nth instance of bins
   '''
-  yields_line = captured_text[captured_text.index('With '+str(nbins)+' bins: ')+1]
+  yields_line_index = captured_text.index('With '+str(nbins)+' bins: ')+1
+  if (nth>1):
+    for i in range(nth-1):
+      yields_line_index = captured_text.index('With '+str(nbins)+' bins: ',yields_line_index+1)+1
+  yields_line = captured_text[yields_line_index]
   paren_idx = yields_line.index('(')
   sig_yields = []
   bak_yields = []
@@ -343,14 +450,18 @@ def get_yields_from_binning_optimizer(captured_text, nbins):
     bak_yields.append(float(yields_line[comma_idx+1:close_idx]))
   return (sig_yields, bak_yields)
 
-def get_cuts_from_binning_optimizer(captured_text, nbins):
+def get_cuts_from_binning_optimizer(captured_text, nbins, nth=1):
   '''Helper function to extract cuts from binning_optimizer print-out
 
   @params
   captured_text - stdout from bdt_evaluation_macro
   nbins - number of bins to consider
   '''
-  yields_line = captured_text[captured_text.index('With '+str(nbins)+' bins: ')+1]
+  yields_line_index = captured_text.index('With '+str(nbins)+' bins: ')+1
+  if (nth>1):
+    for i in range(nth-1):
+      yields_line_index = captured_text.index('With '+str(nbins)+' bins: ',yields_line_index+1)+1
+  yields_line = captured_text[yields_line_index]
   comma_idx = yields_line.index(':')
   cuts = []
   for i in range(nbins-1):
