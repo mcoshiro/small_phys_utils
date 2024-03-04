@@ -75,6 +75,9 @@ void sample_mcmc(unsigned int n_samples, std::vector<SampledVariable> variables,
     hist.push_back(TH1D(("hist_"+variables[irv].name).c_str(),
                    variables[irv].name.c_str(),100,
                    variables[irv].min,variables[irv].max));
+  }
+  //no resizing of prev_random_vars after branches assigned
+  for (unsigned irv = 0; irv < variables.size(); irv++) {
     out_tree.Branch(variables[irv].name.c_str(), &prev_random_vars[irv], 
                     (variables[irv].name+"/F").c_str());
   }
@@ -119,7 +122,7 @@ void sample_mcmc(unsigned int n_samples, std::vector<SampledVariable> variables,
         if (write_ntuple)
           out_tree.Fill();
       }
-      if ((n_current % 20000) == 0) 
+      if ((n_current % 50000) == 0) 
         std::cout << "Processing event " << n_current << std::endl;
       n_current++;
     }

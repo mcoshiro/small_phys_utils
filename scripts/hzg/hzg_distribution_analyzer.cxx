@@ -32,7 +32,7 @@ int hzg_distribution_analyzer(std::string filename) {
   for (int iplot = 0; iplot < 200; iplot++) {
     if (!found_bkg_1) {
       bkg_1 = static_cast<TH1D*>(canvas->FindObject(
-            ("bkg_Z+Fake Photon_"+std::to_string(iplot)).c_str()));
+            ("bkg_Z+FakePhoton_"+std::to_string(iplot)).c_str()));
       if (bkg_1 != nullptr) found_bkg_1 = true;
     }
     if (!found_bkg_2) {
@@ -42,7 +42,7 @@ int hzg_distribution_analyzer(std::string filename) {
     }
     if (!found_sig_1) {
       signal = static_cast<TH1D*>(canvas->FindObject(
-            ("sig_H#rightarrow Z#gamma_"+std::to_string(iplot)).c_str()));
+            ("sig_H#rightarrowZ#gamma_"+std::to_string(iplot)).c_str()));
       if (signal != nullptr) found_sig_1 = true;
     }
   }

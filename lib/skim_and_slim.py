@@ -3,7 +3,7 @@ Function that generates skimmed/slimmed ROOT n-tuples, primarily for MVA trainin
 '''
 import ROOT
 
-def write_ntuples(filenames, cuts, out_name, defines=[], tree_name='tree', branches=()):
+def write_ntuples(filenames, cuts, out_name, defines=[], tree_name='tree', branches=(), directory=''):
   '''Generate ROOT n-tuple from existing n-tuple
   
   Parameters:
@@ -19,7 +19,7 @@ def write_ntuples(filenames, cuts, out_name, defines=[], tree_name='tree', branc
   filenames_vec = ROOT.std.vector('string')()
   for filename in filenames:
     filenames_vec.push_back(filename)
-  df = ROOT.RDataFrame('tree',filenames_vec)
+  df = ROOT.RDataFrame(tree_name,filenames_vec)
   for define in defines:
     if len(define)==2:
       df = df.Define(define[0],define[1])
@@ -28,7 +28,16 @@ def write_ntuples(filenames, cuts, out_name, defines=[], tree_name='tree', branc
   for cut in cuts:
     df = df.Filter(cut)
   if (branches == ()):
-    df.Snapshot(tree_name,'ntuples/'+out_name,'')
+    if (directory==''):
+      df.Snapshot('tree','ntuples/'+out_name,'')
+    else:
+      df.Snapshot('tree',directory+'/'+out_name,'')
   else:
-    df.Snapshot(tree_name,'ntuples/'+out_name,branches)
-  print('Wrote ntuples/'+out_name)
+    if (directory==''):
+      df.Snapshot('tree','ntuples/'+out_name,branches)
+    else:
+      df.Snapshot('tree',directory+'/'+out_name,branches)
+  if (directory==''):
+    print('Wrote ntuples/'+out_name)
+  else:
+    print('Wrote '+directory+'/'+out_name)

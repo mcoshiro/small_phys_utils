@@ -142,7 +142,7 @@ if __name__=='__main__':
   output_code += '\n'
   output_code += '  /*!\\brief evaluates DNN score at a point input\n'
   output_code += '   */\n'
-  output_code += '  float evaluate(std::vector<float> input);\n'
+  output_code += '  float evaluate(std::vector<float> input) const;\n'
   output_code += '\n'
   output_code += 'private:\n'
   output_code += '  std::vector<float> scale(std::vector<float> input);\n'

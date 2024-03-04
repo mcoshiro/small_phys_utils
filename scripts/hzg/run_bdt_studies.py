@@ -26,6 +26,17 @@ def final_photon_pt_studies():
   bdt_utils.train_bdt(base_name,variables,'w_lumi',bdt_options,tag)
   (bdt_utils.evaluate_bdt(base_name,variables,'w_lumi',bdt_options,tag)).print_summary()
 
+def train_vbf():
+  bdt_options = bdt_utils.BdtOptions()
+  variables = ['photon_mva','min_dR','max_dR','pt_mass','cosTheta','costheta',
+              'phi','photon_res','photon_rapidity','l1_rapidity','l2_rapidity',
+              'detajj','dphizgjj','zgjj_balance','ptt','dphijj','zeppenfeld',
+              'ptj2','ptj1','drgj']
+  base_name = 'shuffled_dijet'
+  tag = ''
+  bdt_utils.train_bdt(base_name,variables,'w_lumi_year',bdt_options,tag)
+  (bdt_utils.evaluate_bdt(base_name,variables,'w_lumi_year',bdt_options,tag)).print_summary()
+
 def run_assocprod_studies():
   bdt_options = bdt_utils.BdtOptions()
   bdt_options.NTrees = 100
@@ -80,8 +91,36 @@ def phmva_studies():
   (bdt_utils.evaluate_bdt(base_name,variables,'w_lumi_year',bdt_options,tag)).print_summary()
   #bdt_utils.clean_bdt(base_name,tag)
 
+def density_studies():
+  bdt_options = bdt_utils.BdtOptions()
+  variables = ['pt_llg','eta_llg','cosTheta','Phi','costheta','phi','photon_mva'] 
+  base_name = 'shuffled_dnnstudies'
+  tag = '_density'
+  #bdt_utils.train_bdt(base_name,variables,'w_lumi_year',bdt_options,tag)
+  (bdt_utils.evaluate_bdt(base_name,variables,'w_lumi_year',bdt_options,tag)).print_summary()
+  #bdt_utils.clean_bdt(base_name,tag)
+  #bdt_options = bdt_utils.BdtOptions()
+  #variables = ['photon_mva','min_dR','max_dR','pt_mass','cosTheta','costheta','phi','photon_res','photon_rapidity','l1_rapidity','l2_rapidity']
+  #base_name = 'shuffled_dnncomp'
+  #tag = '_density'
+  #bdt_utils.train_bdt(base_name,variables,'w_lumi_year',bdt_options,tag)
+  #(bdt_utils.evaluate_bdt(base_name,variables,'w_lumi_year',bdt_options,tag)).print_summary()
+  #bdt_utils.clean_bdt(base_name,tag)
+
+def phidtighten_studies():
+  bdt_options = bdt_utils.BdtOptions()
+  variables = ['photon_mva','min_dR','max_dR','pt_mass','cosTheta','costheta','phi','photon_res','photon_rapidity','l1_rapidity','l2_rapidity']
+  base_name = 'shuffled_phidcomp_post'
+  tag = '_phidcomp_post'
+  bdt_utils.train_bdt(base_name,variables,'w_lumi_year',bdt_options,tag)
+  (bdt_utils.evaluate_bdt(base_name,variables,'w_lumi_year',bdt_options,tag)).print_summary()
+  #bdt_utils.clean_bdt(base_name,tag)
+
 if __name__=='__main__':
-  phmva_studies()
+  train_vbf()
+  #phidtighten_studies()
+  #density_studies()
+  #phmva_studies()
   #run_assocprod_studies()
   #bdt_options = bdt_utils.BdtOptions()
   #variables = ['photon_mva','min_dR','max_dR','pt_mass','cosTheta','costheta','phi','photon_res','photon_rapidity','l1_rapidity','l2_rapidity']

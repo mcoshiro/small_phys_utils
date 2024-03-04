@@ -22,9 +22,10 @@ void get_roc_auc(TH1D* signal, TH1D* background);
  * @param max_nbins         maximum number of bins to consider (ncuts + 1)
  * @param min_signal_yield  minimum signal yield allowed in a bin
  * @param scale             scale factor for signal and background to change effective lumi
+ * @param nbins_throw       number of bins to remove from significance calculation
  */
 void binning_optimizer(TH1D* signal, TH1D* background, int max_nbins=6, 
-    float min_signal_yield=0.5, float scale=1.0);
+    float min_signal_yield=0.5, float scale=1.0, unsigned nbins_throw = 0);
 
 /**
  * @brief Function to find optimized cut for a histogram

@@ -49,11 +49,12 @@ void get_roc_auc(TH1D* signal, TH1D* background) {
  * @param max_nbins         maximum number of bins to consider (ncuts + 1)
  * @param min_signal_yield  minimum signal yield allowed in a bin
  * @param scale             scale factor for signal and background to change effective lumi
+ * @param nbins_throw       number of bins to remove from significance calculation
  */
 void binning_optimizer(TH1D* signal, TH1D* background, int max_nbins, 
-    float min_signal_yield, float scale) {
+    float min_signal_yield, float scale, unsigned nbins_throw) {
 
-  for (int nbins = 1; nbins < max_nbins; nbins++) {
+  for (int nbins = 1; nbins <= max_nbins; nbins++) {
     std::cout << "With " << nbins << " bins: " << std::endl;
     if (nbins < 2) {
       float bin_s = signal->Integral()*scale;
@@ -80,12 +81,15 @@ void binning_optimizer(TH1D* signal, TH1D* background, int max_nbins,
       extended_cuts.insert(extended_cuts.end(),cuts.begin(),cuts.end());
       extended_cuts.push_back(hist_nbins+2);
       float significance = 0;
+      bool can_throw = false;
+      if (extended_cuts.size() > nbins_throw+1) can_throw = true;
       for (unsigned i = 0; i<(extended_cuts.size()-1); i++) {
         float bin_s = signal->Integral(extended_cuts[i],extended_cuts[i+1]-1)*scale;
         float bin_b = background->Integral(extended_cuts[i],extended_cuts[i+1]-1)*scale;
         if (bin_s <= min_signal_yield) bin_s = 0;
         if (bin_b <= 0) bin_b = 0.01;
-        significance += bin_s*bin_s/bin_b;
+        if (!(can_throw && i<nbins_throw))
+          significance += bin_s*bin_s/bin_b;
       }
       significance = sqrt(significance);
       if (significance > max_significance) {
