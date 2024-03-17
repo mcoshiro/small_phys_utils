@@ -3,7 +3,7 @@ Function that generates skimmed/slimmed ROOT n-tuples, primarily for MVA trainin
 '''
 import ROOT
 
-def write_ntuples(filenames, cuts, out_name, defines=[], tree_name='tree', branches=(), directory=''):
+def write_ntuples(filenames, cuts, out_name, defines=[], tree_name='tree', branches=()):
   '''Generate ROOT n-tuple from existing n-tuple
   
   Parameters:
@@ -28,16 +28,7 @@ def write_ntuples(filenames, cuts, out_name, defines=[], tree_name='tree', branc
   for cut in cuts:
     df = df.Filter(cut)
   if (branches == ()):
-    if (directory==''):
-      df.Snapshot('tree','ntuples/'+out_name,'')
-    else:
-      df.Snapshot('tree',directory+'/'+out_name,'')
+    df.Snapshot('tree',out_name,'')
   else:
-    if (directory==''):
-      df.Snapshot('tree','ntuples/'+out_name,branches)
-    else:
-      df.Snapshot('tree',directory+'/'+out_name,branches)
-  if (directory==''):
-    print('Wrote ntuples/'+out_name)
-  else:
-    print('Wrote '+directory+'/'+out_name)
+    df.Snapshot('tree',out_name,branches)
+  print('Wrote '+out_name)

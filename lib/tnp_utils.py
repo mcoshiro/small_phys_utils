@@ -109,7 +109,6 @@ def fit_quality(canvas, hist_name, curve_name, nbins, x_min, x_max):
     prev_diff = diff
   return integral_diff
 
-#todo: add other fits, with the option to switch if one fails
 def fit_cmsshape_cb(hist, return_type='pdf', verbose=False, output_dir='plots/'):
   '''Fit a CMSshape (erf*exp) plus crystal ball distribution to the given TH1
   params
@@ -302,6 +301,186 @@ def fit_cmsshape_cb(hist, return_type='pdf', verbose=False, output_dir='plots/')
   print('Fit failed, best automatic try: '+str(best_try)+', quality: '+str(best_quality))
   return (1,pdf_sb)
 
+def do_tnp_fit(hist, function_type, output_name, return_type='pdf', verbose=False):
+  '''Fit a CMSshape (erf*exp) plus crystal ball distribution to the given TH1
+  params
+  hist           TH1D, histogram to fit
+  function_type  string, functions to use in fit - see below for supported
+  return_type    string, 'pdf' or 'curve'
+  verbose        bool, print/save extra information
+  output_dir     string, location ot save output
+
+  Supported functional forms: 'CB+CMS' 'CB+logisticexp' 'Gauss+CMS'
+
+  returns 1 if the fit fails, or the RooAbsPdf ('pdf') or a tuple of the S+B 
+  and B fits RooCruves ('curve') if the fit succeeds
+  '''
+  #check arguments
+  if not return_type in ['pdf','curve']:
+    raise ValueError('Invalid argument to fit_cmsshape_cb, must be "pdf" or "curve".')
+
+  if not function_type in ['CB+CMS','CB+logisticexp','Gauss+CMS']:
+    raise ValueError('Invalid function_type argument to do_tnp_fit.')
+
+  #set up RooFit stuff
+  workspace = ROOT.RooWorkspace()
+  mll = ROOT.RooRealVar('mll', 'm_{ll} [GeV]', 50.0, 130.0)
+  data = ROOT.RooDataHist('data','Di"photon" invariant mass', ROOT.RooArgList(mll), hist)
+  getattr(workspace,'import')(mll)
+  getattr(workspace,'import')(data)
+  x_name = 'mll'
+  param_names = []
+
+  if function_type=='CB+CMS':
+    gauss_mu = ROOT.RooRealVar('gauss_mu', 'Z peak Gaussian mean', 85.0, 95.0) 
+    gauss_sigma = ROOT.RooRealVar('gauss_sigma', 'Z peak Gaussian width', 0.01, 15.0) 
+    gauss_norm = ROOT.RooRealVar('sig_norm', 'Z peak normalization', 0.0, 1000000000.0) 
+    cb_alphal = ROOT.RooRealVar('cb_alphal', 'Z peak CB left switchover', 0.1, 10.0) 
+    cb_nl = ROOT.RooRealVar('cb_nl', 'Z peak CB left power', 0.1, 10.0) 
+    cb_alphar = ROOT.RooRealVar('cb_alphar', 'Z peak CB right switchover', 0.1, 10.0) 
+    cb_nr = ROOT.RooRealVar('cb_nr', 'Z peak CB right power', 0.1, 10.0) 
+    erf_mu = ROOT.RooRealVar('erf_mu', 'Nonresonant (erf) turn-on midpoint', 30.0, 100.0)
+    erf_sigma = ROOT.RooRealVar('erf_sigma', 'Nonresonant (erf) turn-on width', 0.001, 2.0) 
+    exp_lambda = ROOT.RooRealVar('exp_lambda', 'Nonresonant exponential parameter', 0.0001, 100.0) 
+    bak_pedestal = ROOT.RooRealVar('bak_pedestal', 'Background pedestal', -1.0, 1.0) 
+    bak_norm = ROOT.RooRealVar('bak_norm', 'Nonresonant normalization', 0.0, 1000000000.0) 
+    gauss_sigma.setVal(3.0)
+    gauss_norm.setVal(50000.0)
+    erf_mu.setVal(65.0)
+    erf_sigma.setVal(0.2)
+    exp_lambda.setVal(4.0)
+    bak_norm.setVal(50000.0)
+    getattr(workspace,'import')(gauss_mu)
+    getattr(workspace,'import')(gauss_sigma)
+    getattr(workspace,'import')(gauss_norm)
+    getattr(workspace,'import')(cb_alphal)
+    getattr(workspace,'import')(cb_nl)
+    getattr(workspace,'import')(cb_alphar)
+    getattr(workspace,'import')(cb_nr)
+    getattr(workspace,'import')(erf_mu)
+    getattr(workspace,'import')(erf_sigma)
+    getattr(workspace,'import')(exp_lambda)
+    getattr(workspace,'import')(bak_pedestal)
+    getattr(workspace,'import')(bak_norm)
+    param_names = ['gauss_mu','gauss_sigma','sig_norm','cb_alphal','cb_nl',
+                   'cb_alphar','cb_nr','erf_mu','erf_sigma','exp_lambda',
+                   'bak_pedestal','bak_norm']
+
+    pdf_s  = ROOT.RooCrystalBall('pdf_s','pdf_s', mll, gauss_mu, gauss_sigma, cb_alphal, cb_nl, cb_alphar, cb_nr)
+    pdf_b = ROOT.RooGenericPdf('pdf_b','pdf_b',
+        '(TMath::Erf((@0-@1)*@2)+1.0)/2.0*exp(-1.0*@3*(@0-50.0)/80.0)+@4',
+        ROOT.RooArgList(mll, erf_mu, erf_sigma, exp_lambda, bak_pedestal))
+    pdf_sb = ROOT.RooAddPdf('pdf_sb', 'pdf_sb', ROOT.RooArgList(pdf_s, pdf_b), ROOT.RooArgList(gauss_norm, bak_norm))
+    getattr(workspace,'import')(pdf_sb)
+
+  elif function_type=='Gauss+CMS':
+    gauss_mu = ROOT.RooRealVar('gauss_mu', 'Z peak Gaussian mean', 85.0, 95.0) 
+    gauss_sigma = ROOT.RooRealVar('gauss_sigma', 'Z peak Gaussian width', 0.01, 15.0) 
+    gauss_norm = ROOT.RooRealVar('sig_norm', 'Z peak normalization', 0.0, 1000000000.0) 
+    erf_mu = ROOT.RooRealVar('erf_mu', 'Nonresonant (erf) turn-on midpoint', 30.0, 100.0)
+    erf_sigma = ROOT.RooRealVar('erf_sigma', 'Nonresonant (erf) turn-on width', 0.001, 2.0) 
+    exp_lambda = ROOT.RooRealVar('exp_lambda', 'Nonresonant exponential parameter', 0.0001, 100.0) 
+    bak_pedestal = ROOT.RooRealVar('bak_pedestal', 'Background pedestal', -1.0, 1.0) 
+    bak_norm = ROOT.RooRealVar('bak_norm', 'Nonresonant normalization', 0.0, 1000000000.0) 
+    gauss_sigma.setVal(3.0)
+    gauss_norm.setVal(50000.0)
+    erf_mu.setVal(65.0)
+    erf_sigma.setVal(0.2)
+    exp_lambda.setVal(4.0)
+    bak_norm.setVal(50000.0)
+    getattr(workspace,'import')(gauss_mu)
+    getattr(workspace,'import')(gauss_sigma)
+    getattr(workspace,'import')(gauss_norm)
+    getattr(workspace,'import')(erf_mu)
+    getattr(workspace,'import')(erf_sigma)
+    getattr(workspace,'import')(exp_lambda)
+    getattr(workspace,'import')(bak_pedestal)
+    getattr(workspace,'import')(bak_norm)
+    param_names = ['gauss_mu','gauss_sigma','sig_norm','erf_mu','erf_sigma',
+                   'exp_lambda','bak_pedestal','bak_norm']
+
+    pdf_s  = ROOT.RooGaussian('pdf_s','pdf_s', mll, gauss_mu, gauss_sigma)
+    pdf_b = ROOT.RooGenericPdf('pdf_b','pdf_b',
+        '(TMath::Erf((@0-@1)*@2)+1.0)/2.0*exp(-1.0*@3*(@0-50.0)/80.0)+@4',
+           ROOT.RooArgList(mll, erf_mu, erf_sigma, exp_lambda, bak_pedestal))
+    pdf_sb = ROOT.RooAddPdf('pdf_sb', 'pdf_sb', ROOT.RooArgList(pdf_s, pdf_b), ROOT.RooArgList(gauss_norm, bak_norm))
+    getattr(workspace,'import')(pdf_sb)
+
+  elif function_type=='CB+logisticexp':
+    gauss_mu = ROOT.RooRealVar('gauss_mu', 'Z peak Gaussian mean', 85.0, 95.0) 
+    gauss_sigma = ROOT.RooRealVar('gauss_sigma', 'Z peak Gaussian width', 0.01, 15.0) 
+    gauss_norm = ROOT.RooRealVar('sig_norm', 'Z peak normalization', 0.0, 1000000000.0) 
+    cb_alphal = ROOT.RooRealVar('cb_alphal', 'Z peak CB left switchover', 0.1, 10.0) 
+    cb_nl = ROOT.RooRealVar('cb_nl', 'Z peak CB left power', 0.1, 10.0) 
+    cb_alphar = ROOT.RooRealVar('cb_alphar', 'Z peak CB right switchover', 0.1, 10.0) 
+    cb_nr = ROOT.RooRealVar('cb_nr', 'Z peak CB right power', 0.1, 10.0) 
+    logi_offset = ROOT.RooRealVar('logi_offset', 'Logistic curve offset', 30.0, 100.0) 
+    logi_width = ROOT.RooRealVar('logi_width', 'Logistic curve width', 0.005, 30.0) 
+    exp_lambda = ROOT.RooRealVar('exp_lambda', 'Nonresonant exponential parameter', 0.0001, 100.0) 
+    bak_pedestal = ROOT.RooRealVar('bak_pedestal', 'Background pedestal', -1.0, 1.0) 
+    bak_norm = ROOT.RooRealVar('bak_norm', 'Nonresonant normalization', 0.0, 1000000000.0) 
+    gauss_sigma.setVal(3.0)
+    gauss_norm.setVal(50000.0)
+    logi_offset.setVal(65.0)
+    logi_width.setVal(0.2)
+    exp_lambda.setVal(4.0)
+    bak_norm.setVal(50000.0)
+    getattr(workspace,'import')(gauss_mu)
+    getattr(workspace,'import')(gauss_sigma)
+    getattr(workspace,'import')(gauss_norm)
+    getattr(workspace,'import')(cb_alphal)
+    getattr(workspace,'import')(cb_nl)
+    getattr(workspace,'import')(cb_alphar)
+    getattr(workspace,'import')(cb_nr)
+    getattr(workspace,'import')(logi_offset)
+    getattr(workspace,'import')(logi_width)
+    getattr(workspace,'import')(exp_lambda)
+    getattr(workspace,'import')(bak_pedestal)
+    getattr(workspace,'import')(bak_norm)
+    param_names = ['gauss_mu','gauss_sigma','sig_norm','cb_alphal','cb_nl',
+                   'cb_alphar','cb_nr','logi_offset','logi_width','exp_lambda',
+                   'bak_pedestal','bak_norm']
+
+    pdf_s  = ROOT.RooCrystalBall('pdf_s','pdf_s', mll, gauss_mu, gauss_sigma, cb_alphal, cb_nl, cb_alphar, cb_nr)
+    pdf_b = ROOT.RooGenericPdf('pdf_b','pdf_b',
+        'exp(-1.0*@3*(@0-50.0)/80.0)/(1.0+exp(-1.0*@2*(@0-@1)))+@4',
+           ROOT.RooArgList(mll, logi_offset, logi_width, exp_lambda, bak_pedestal))
+    pdf_sb = ROOT.RooAddPdf('pdf_sb', 'pdf_sb', ROOT.RooArgList(pdf_s, pdf_b), ROOT.RooArgList(gauss_norm, bak_norm))
+    getattr(workspace,'import')(pdf_sb)
+
+  quality_threshold = 0.06
+
+  #manual fit
+  quality = perform_interactive_fit(workspace, x_name, param_names)
+  #if (quality<quality_threshold):
+  plot_postfit = workspace.var(x_name).frame()
+  data.plotOn(plot_postfit)
+  workspace.pdf('pdf_sb').plotOn(plot_postfit,ROOT.RooFit.Name('postfit_sb'))
+  sig_norm_temp = workspace.var('sig_norm').getValV()
+  bak_norm_temp = workspace.var('bak_norm').getValV()
+  workspace.var('sig_norm').setVal(0.0)
+  workspace.pdf('pdf_sb').plotOn(plot_postfit,ROOT.RooFit.Normalization(bak_norm_temp/(sig_norm_temp+bak_norm_temp),ROOT.RooAbsReal.Relative),ROOT.RooFit.Name('postfit_b'))
+  workspace.var('sig_norm').setVal(sig_norm_temp)
+  postfit_canvas = ROOT.TCanvas()
+  plot_postfit.Draw()
+
+  postfit_canvas.SaveAs(output_name)
+
+  postfitsb = ROOT.cast_tobject_to_roocurve(postfit_canvas.FindObject('postfit_sb'))
+  postfitb = ROOT.cast_tobject_to_roocurve(postfit_canvas.FindObject('postfit_b'))
+  if (verbose): 
+    print('fit quality: '+str(quality))
+    print('Estimated Nsig: '+str(workspace.var('sig_norm').getValV()))
+    print('Estimated Nbak: '+str(workspace.var('bak_norm').getValV()))
+    print('Entries in data: '+str(hist.Integral()))
+  if return_type == 'curve':
+    return (0,postfitsb, postfitb)
+  else:
+    return (0,pdf_sb)
+
+  #print('Fit failed, best automatic try: '+str(best_try)+', quality: '+str(best_quality))
+  #return (1,pdf_sb)
+
 def perform_automatic_fit(workspace, x_name, param_names, noise=0.0, verbose=False, output_name=''):
   '''Method to perform automated fit and quality check. Returns fit quality
   This method will overwrite workspace parameters, so save a snapshot beforehand
@@ -391,6 +570,7 @@ def perform_interactive_fit(workspace, x_name, param_names):
       print('(l)ist               display values of variables')
       #print('(n)orm               automatically fix norms')
       print('(q)uit               exit interactive fitting session')
+      print('(a)utoload <values>  set all variables at once (or output)')
       print('(r)evert             revert to prefit parameter values')
       print('(s)et <var> <value>  set variable <var> to <value>')
       print('(w)rite <fname>      write current canvas to a file')
@@ -401,20 +581,60 @@ def perform_interactive_fit(workspace, x_name, param_names):
       if not (user_input[1] in param_names):
         print('ERROR: unknown parameter '+user_input[1])
         continue
-      workspace.var(user_input[1]).setVal(float(user_input[2]))
-      plot = workspace.var(x_name).frame()
-      data.plotOn(plot)
-      pdf_sb.plotOn(plot,ROOT.RooFit.Name('prefit_sb'))
-      sig_norm_temp = workspace.var('sig_norm').getValV()
-      bak_norm_temp = workspace.var('bak_norm').getValV()
-      workspace.var('sig_norm').setVal(0.0)
-      pdf_sb.plotOn(plot,ROOT.RooFit.Normalization(bak_norm_temp/(sig_norm_temp+bak_norm_temp),ROOT.RooAbsReal.Relative),ROOT.RooFit.Name('prefit_b'))
-      workspace.var('sig_norm').setVal(sig_norm_temp)
-      canvas.cd()
-      plot.Draw()
-      canvas.Update()
-      quality = fit_quality(canvas, 'h_data', 'prefit_sb', 78, 51.0, 129.0)
-      print('quality: '+str(quality))
+      try:
+        float(user_input[2])
+        workspace.var(user_input[1]).setVal(float(user_input[2]))
+        plot = workspace.var(x_name).frame()
+        data.plotOn(plot)
+        pdf_sb.plotOn(plot,ROOT.RooFit.Name('prefit_sb'))
+        sig_norm_temp = workspace.var('sig_norm').getValV()
+        bak_norm_temp = workspace.var('bak_norm').getValV()
+        workspace.var('sig_norm').setVal(0.0)
+        pdf_sb.plotOn(plot,ROOT.RooFit.Normalization(bak_norm_temp/(sig_norm_temp+bak_norm_temp),ROOT.RooAbsReal.Relative),ROOT.RooFit.Name('prefit_b'))
+        workspace.var('sig_norm').setVal(sig_norm_temp)
+        canvas.cd()
+        plot.Draw()
+        canvas.Update()
+        quality = fit_quality(canvas, 'h_data', 'prefit_sb', 78, 51.0, 129.0)
+        print('quality: '+str(quality))
+      except ValueError:
+        print('Unable to cast value, skipping')
+    if user_input[0]=='autoload' or user_input[0]=='a':
+      if len(user_input) < 2:
+        #output autoload values
+        first = True
+        for param_name in param_names:
+          if first:
+            first = False
+          else:
+            print(',',end='')
+          print(str(workspace.var(param_name).getValV()),end='')
+        print('')
+      else:
+        #load autoload values
+        param_values = []
+        try:
+          param_values = [float(value) for value in user_input[1].split(',')]
+        except ValueError:
+          print('unable to cast value, skipping')
+        if len(param_values) != len(param_names):
+          print('incorrect number of autoset values, skipping')
+        else:
+          for ipar in range(len(param_names)):
+            workspace.var(param_names[ipar]).setVal(param_values[ipar])
+          plot = workspace.var(x_name).frame()
+          data.plotOn(plot)
+          pdf_sb.plotOn(plot,ROOT.RooFit.Name('prefit_sb'))
+          sig_norm_temp = workspace.var('sig_norm').getValV()
+          bak_norm_temp = workspace.var('bak_norm').getValV()
+          workspace.var('sig_norm').setVal(0.0)
+          pdf_sb.plotOn(plot,ROOT.RooFit.Normalization(bak_norm_temp/(sig_norm_temp+bak_norm_temp),ROOT.RooAbsReal.Relative),ROOT.RooFit.Name('prefit_b'))
+          workspace.var('sig_norm').setVal(sig_norm_temp)
+          canvas.cd()
+          plot.Draw()
+          canvas.Update()
+          quality = fit_quality(canvas, 'h_data', 'prefit_sb', 78, 51.0, 129.0)
+          print('quality: '+str(quality))
     if user_input[0]=='fit' or user_input[0]=='f':
       workspace.saveSnapshot('prefit',','.join(param_names))
       pdf_sb.fitTo(data)

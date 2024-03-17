@@ -1,15 +1,16 @@
 #include "rapidjson/document.h"
 #include "rapidjson/filereadstream.h"
 #include "rapidjson/error/en.h"
+#include <iostream>
 #include <optional>
 #include <algorithm>
 #include <stdexcept>
 #include <cmath>
 #include "correction.hpp"
 
-using namespace correction;
+using namespace correction_mod;
 
-class correction::JSONObject {
+class correction_mod::JSONObject {
   public:
     JSONObject(rapidjson::Value::ConstObject&& json) : json_(json) { }
     // necessary to force use of const Value::GetObject() method

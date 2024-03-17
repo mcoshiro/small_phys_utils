@@ -7,7 +7,7 @@
 #include <map>
 #include <memory>
 
-namespace correction {
+namespace correction_mod {
 
 constexpr int evaluator_version { 2 };
 

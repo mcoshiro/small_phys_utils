@@ -21,6 +21,18 @@ pt_bins = [15.0,17.5,20.0,22.5,25.0]
 eta_bins = [0.0,0.25,0.5,0.75,1.0,1.25,1.5,1.75,2.0,2.25,2.5]
 mll_bins = [50.0,81.0,101.0,130.0]
 
+def fix_correctionlib_json(json_text):
+  '''Fixes the format of correctionlib json created using corr.json, since 
+  it is not properly formatted by default
+  '''
+  corr = json.loads(json_text)
+  json_dict = {
+    'schema_version' : 2,
+    'description' : '',
+    'corrections' : [corr]
+  }
+  return json.dumps(json_dict,indent=2)
+
 def make_plots(input_file):
   '''Generate eta-pt binned plots of photon ID variables to show relative 
   indepedence of mll, and mll spectra to fit in the next step
@@ -89,7 +101,7 @@ def make_plots(input_file):
 
   output_file.Close()
 
-def generate_weights():
+def generate_weights(json_filename):
   '''Use histograms from the previous step, and perform fits to the Z-peak to
   get background subtraction weights
   '''
@@ -145,8 +157,9 @@ def generate_weights():
           ),
       )
 
-  with open('json/bkg_weights.json','w') as output_file:
+  with open(json_filename,'w') as output_file:
     output_file.write(weight_set.json(exclude_unset=True))
+    output_file.write(fix_correctionlib_json(weight_set.json(exclude_unset=True)))
   print(output_string)
   input_file.Close()
 
@@ -154,8 +167,9 @@ if __name__ == '__main__':
 
   argument_parser = ArgumentParser(prog='fit_zpeak',
   description='Script to generate plots and weights for photon correction background subtraction')
-  argument_parser.add_argument('-s','--steps',default='generate_weights')
+  argument_parser.add_argument('-s','--steps',default='make_plots,generate_weights,clean')
   argument_parser.add_argument('-i','--input_file',default='/net/cms26/cms26r0/oshiro/tnp_tuples/photonidskim_data_2018_new.root')
+  argument_parser.add_argument('-j','--json_file',default='json/bkg_weights.json')
 
   args = argument_parser.parse_args()
   steps = args.steps.split(',')
@@ -164,11 +178,9 @@ if __name__ == '__main__':
     make_plots(args.input_file)
 
   if 'generate_weights' in steps:
-    generate_weights()
+    generate_weights(args.json_file)
 
   if 'clean' in steps:
     subprocess.run('rm temp_zpeak_hists.root'.split())
 
-  #if 'apply_weights' in steps:
-  #generate n-tuples with weights that can be used for DNN training
 

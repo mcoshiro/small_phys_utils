@@ -80,6 +80,7 @@ class RplPlot:
     self.graphs = []
     self.graph_color = []
     self.bottom_plots = []
+    self.bottom_is_ratio = True
     self.bottom_plot_color_index = []
     self.n_plots = 0
 
@@ -141,6 +142,7 @@ class RplPlot:
     numerator_hist = None
     denominator_hist = None
     numerator_color_index = -1
+    denominator_color_index = -1
     color_index = 0
     for hist in self.point_hists:
       if (hist.GetName()==numerator_name):
@@ -148,6 +150,7 @@ class RplPlot:
         numerator_color_index = color_index
       if (hist.GetName()==denominator_name):
         denominator_hist = hist
+        denominator_color_index = color_index
       color_index += 1
     for hist in self.line_hists:
       if (hist.GetName()==numerator_name):
@@ -155,11 +158,12 @@ class RplPlot:
         numerator_color_index = color_index
       if (hist.GetName()==denominator_name):
         denominator_hist = hist
+        denominator_color_index = color_index
       color_index += 1
     if (numerator_hist != None and denominator_hist != None):
       self.bottom_plots.append(numerator_hist.Clone())
       self.bottom_plots[-1].Divide(denominator_hist)
-      self.bottom_plot_color_index.append(numerator_color_index)
+      self.bottom_plot_color_index.append(denominator_color_index)
       self.plot_bottom = True
     else:
       raise ValueError('Could not find numerator and denominator plots requested for ratio.')
@@ -173,6 +177,8 @@ class RplPlot:
     minuend_name - name of plot element to use as minuend
     subtrahend_name - name of plot element to use as subtrahend
     '''
+    self.bottom_is_ratio = False
+    self.y_title_lower = 'data-MC'
     minuend_hist = None
     subtrahend_hist = None
     minuend_color_index = -1
@@ -276,8 +282,9 @@ class RplPlot:
     dummy_hist_lower.SetMaximum(self.y_max_lower)
     dummy_hist_lower.SetLabelSize(0.028,'x')
     dummy_hist_lower.SetLabelSize(0.028,'y')
-    dummy_hist_lower.SetTitleOffset(2.0,'y')
-    dummy_hist_lower.SetTitleSize(0.45/float(len(self.y_title_lower)),'y')
+    dummy_hist_lower.SetTitleOffset(1.5,'y')
+    #dummy_hist_lower.SetTitleOffset(2.0,'y')
+    #dummy_hist_lower.SetTitleSize(0.45/float(len(self.y_title_lower)),'y')
     dummy_hist_lower.SetTitleSize(0.032,'x')
     dummy_hist_lower.GetYaxis().SetTitle(self.y_title_lower)
     dummy_hist_lower.GetYaxis().SetNdivisions(606)
@@ -286,7 +293,10 @@ class RplPlot:
     dummy_hist_lower.GetXaxis().SetNdivisions(606)
 
     #set up pads
-    can = ROOT.TCanvas('c','c',600,600)
+    canvas_name = filename[:filename.rfind('.')]
+    if canvas_name.rfind('/') != -1:
+      canvas_name = canvas_name[canvas_name.rfind('/')+1:]
+    can = ROOT.TCanvas('c_'+canvas_name,'c',600,600)
     top_pad = ROOT.TPad('top_pad','',0.0,0.0,1.0,1.0)
     top_pad.SetTicks(1,1)
     if (self.plot_bottom):
@@ -405,6 +415,15 @@ class RplPlot:
       bot_pad.Draw('same')
       bot_pad.cd()
       dummy_hist_lower.Draw()
+      bottom_ref_value = 1.0
+      if not self.bottom_is_ratio:
+        bottom_ref_value = 0.0
+      line = ROOT.TLine(self.x_min,bottom_ref_value,self.x_max,bottom_ref_value)
+      line.SetNDC(ROOT.kFALSE)
+      line.SetLineStyle(2)
+      line.SetLineColor(ROOT.kBlack)
+      line.SetLineWidth(2)
+      line.Draw('SAME')
       bottom_index = 0
       for bottom_plot in self.bottom_plots:
         bottom_plot.SetLineWidth(3)

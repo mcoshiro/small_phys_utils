@@ -2,17 +2,21 @@
 '''
 Script that generates slimmed n-tuples for photon Fall17v2 IDMVA corrections
 '''
-import subprocess
+from argparse import ArgumentParser
+from glob import glob
+from skim_and_slim import write_ntuples
+from subprocess import run as subprocessrun
+from spu_utils import get_path, get_filename_in_directory
 import ROOT
-import skim_and_slim
 
-ROOT.gInterpreter.ProcessLine('#include "nn_model_phid2018_old.hpp"')
+#ROOT.gInterpreter.ProcessLine('#include "nn_model_phid2018_old.hpp"')
 ROOT.gInterpreter.Declare("""
 template <class C>
 using RVec = ROOT::VecOps::RVec<C>;
 
-const nn_model_phid2018 dnn;
+//const nn_model_phid2018 dnn;
 
+//NOTE: This WP90 function is definitely not correct. Not sure about the WPL one below
 float pass_ele_fall17v2_wp90(float mva_score, float el_pt, float el_sc_abseta) {
   float cut = -1.0;
   if (el_pt < 10) {
@@ -51,13 +55,20 @@ bool pass_ele_fall17v2_wpl(float mva_score, float el_pt, float el_sc_abseta) {
   return (mva_score > cut);
 }
 
-float get_rw(float ph_et, float ph_sc_abseta) {
-  return 5.2200224/dnn.get_hist_interp(ph_et, ph_sc_abseta);
-}
+//float get_rw(float ph_et, float ph_sc_abseta) {
+//  return 5.2200224/dnn.get_hist_interp(ph_et, ph_sc_abseta);
+//}
 
 """)
 
 if __name__=='__main__':
+  #parse arguments
+  argument_parser = ArgumentParser(prog='generate_photonid_skim',
+      description='Generates a skim for deriving photon ID correction from input file (-i) and outputs it to output file (-o)')
+  argument_parser.add_argument('-i','--input_filename')
+  argument_parser.add_argument('-o','--output_filename')
+  args = argument_parser.parse_args()
+
   ROOT.EnableImplicitMT()
   cuts = ['tag_Ele_pt>35&&tag_sc_abseta<2.17&&(tag_sc_abseta>1.566||tag_sc_abseta<1.4442)',
           'ph_et>=15&&ph_sc_abseta<2.5&&((ph_sc_abseta<1.4442&&ph_mva94XV2>-0.4)||(ph_sc_abseta>1.566&&ph_mva94XV2>-0.58))']
@@ -65,24 +76,27 @@ if __name__=='__main__':
                 ('tag_ele_fall17v2_wpl','pass_ele_fall17v2_wpl(tag_Ele_IsoMVA94XV2,tag_Ele_pt,tag_sc_abseta)'),
                 ('ph_esEnergyOverRawE','static_cast<float>((ph_preshower_energy_plane1+ph_preshower_energy_plane2)/ph_sc_rawEnergy)'),
                 ('w','get_rw(ph_et, ph_sc_abseta)')]
-  defines_data = [('tag_ele_fall17v2_wpl','pass_ele_fall17v2_wpl(tag_Ele_IsoMVA94XV2,tag_Ele_pt,tag_sc_abseta)'),
-                  ('ph_esEnergyOverRawE','static_cast<float>((ph_preshower_energy_plane1+ph_preshower_energy_plane2)/ph_sc_rawEnergy)'),
-                  ('w','0')]
+  defines = [('ph_esEnergyOverRawE','static_cast<float>((ph_preshower_energy_plane1+ph_preshower_energy_plane2)/ph_sc_rawEnergy)')]
   branches = ('pair_mass','ph_et','ph_eta','ph_r9','ph_s4','ph_sc_etaWidth',
               'ph_sc_phiWidth','ph_sieie','ph_sieip','ph_phoIso','ph_chIso',
-              'ph_chWorIso','ph_sc_rawEnergy','ph_sc_eta','ph_sc_abseta','event_rho',
-              'ph_ESsigma','ph_esEnergyOverRawE','ph_mva94XV2','w','tag_Ele_IsoMVA94XV2')
-  simu_files_2018 = ['/net/cms26/cms26r0/oshiro/tnp_tuples/DY_LO2018.root']
-  data_files_2018 = ['/net/cms26/cms26r0/oshiro/tnp_tuples/Run2018A.root',
-                     '/net/cms26/cms26r0/oshiro/tnp_tuples/Run2018B.root',
-                     '/net/cms26/cms26r0/oshiro/tnp_tuples/Run2018C.root',
-                     '/net/cms26/cms26r0/oshiro/tnp_tuples/Run2018D.root']
-  skim_and_slim.write_ntuples(
-      data_files_2018,
+              'ph_chWorIso','ph_sc_rawEnergy','ph_sc_eta','ph_sc_abseta',
+              'event_rho','ph_ESsigma','ph_esEnergyOverRawE','ph_mva94XV2',
+              'event')
+
+  input_files = glob(args.input_filename)
+  #if (args.output_filename[-5:] != '.root'):
+  #  raise ValueError('Output file extension must be .root')
+  #temp_filename = args.output_filename[:-5]+'_temp.root'
+  #shuffled_filename = get_path(temp_filename)+'/shuffled_'+get_filename_in_directory(temp_filename)
+
+  write_ntuples(
+      input_files,
       cuts,
-      'photonidskim_data_2018_new.root',
-      defines_data,
+      args.output_filename,
+      defines,
       'tnpPhoIDs/fitter_tree',
-      branches,
-      '/net/cms26/cms26r0/oshiro/tnp_tuples/')
+      branches)
+  #subprocessrun(('/data1/jbkim/Linux/el7_v1/bin/python3.9 scripts/shuffle_tree.py '+temp_filename+' tree').split())
+  #subprocessrun(('mv '+shuffled_filename+' '+args.output_filename).split())
+  #subprocessrun(('rm '+temp_filename).split())
 

@@ -3,6 +3,7 @@
  */
 #include "correction_wrapper.hpp"
 #include "correction.hpp"
+#include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -10,13 +11,13 @@
 using std::string;
 using std::vector;
 using std::unique_ptr;
-using correction::CorrectionSet;
-using correction::Variable;
-using Ref = correction::Correction::Ref;
+using correction_mod::CorrectionSet;
+using correction_mod::Variable;
+using Ref = correction_mod::Correction::Ref;
 
 CorrectionWrapper::CorrectionWrapper(string filename, string correction_name) {
   unique_ptr<CorrectionSet>* cs = new unique_ptr<CorrectionSet>(CorrectionSet::from_file(filename));
-  Ref* correction_map = new Ref((*cs)->at(correction_name));
+  Ref* correction_map = new Ref((*cs)->at(correction_name.c_str()));
   cs_voidptr = static_cast<void*>(cs);
   correction_map_voidptr = static_cast<void*>(correction_map);
 }
