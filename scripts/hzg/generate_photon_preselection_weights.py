@@ -7,17 +7,16 @@ from argparse import ArgumentParser
 from correctionlib import schemav2 
 from tnp_utils import do_tnp_fit, integrate_tgraph
 from root_plot_lib import RplPlot
-from math import sqrt
+from math import sqrt, hypot
 import ROOT
 import json
 import subprocess
 import ctypes
 
 #constants
-#pt_bins = [15.0,17.5,20.0,25.0,35.0,50.0,200.0]
-#eta_bins = [0.0,0.8,1.5,2.0,2.5]
-pt_bins = [15.0,17.5]
-eta_bins = [0.0,0.8,1.5]
+pt_bins = [15.0,17.5,20.0,25.0,35.0,50.0,200.0]
+#pt_bins = [35.0,50.0] #havent run this yet 2017
+eta_bins = [0.0,0.8,1.5,2.0,2.5]
 
 def fix_correctionlib_json(json_texts):
   '''Fixes the format of correctionlib json created using corr.json, since 
@@ -120,7 +119,7 @@ def temp_debug(mc_input_file):
   pplot_three.plot_outline(plot_three.GetValue())
   pplot_three.draw('plots/debug_three.pdf')
 
-def generate_weights(eff_json_filename, corr_json_filename):
+def generate_weights(eff_json_filename, corr_json_filename, prefit_filename=''):
   '''Use histograms from the previous step, and perform fits to the Z-peak to
   get efficiencies for data. Directly extracts MC efficiencies for comparison
   '''
@@ -160,6 +159,16 @@ def generate_weights(eff_json_filename, corr_json_filename):
   #    mc_uncertainty.append(unc)
   #    ipteta += 1
 
+  prefit_strings = []
+  prefit_idx = 0
+  if prefit_filename != '':
+    with open(prefit_filename,'r') as prefit_file:
+      for line in prefit_file:
+        prefit_strings.append(line[:-1])
+  else:
+    for i in range((len(pt_bins)-1)*(len(eta_bins)-1)*2*4):
+      prefit_strings.append('')
+
   #Do Z-peak fits to extract data uncertainties
   input_file = ROOT.TFile('temp_zpeak_hists.root','READ')
 
@@ -182,7 +191,8 @@ def generate_weights(eff_json_filename, corr_json_filename):
         pass_hist = input_file.Get('llfitdata_pass'+bin_string)
         fit_result_pass = do_tnp_fit(pass_hist,fit_funcs[ifit],
             'plots/photon_corr/presel_pass_'+fit_types[ifit]+'_tnp'+bin_string+'.pdf',
-            'curve',True)
+            'curve',True,prefit_strings[prefit_idx])
+        prefit_idx += 1
         if (fit_result_pass[0] != 0):
           raise RuntimeError('Fit failed.')
 
@@ -193,7 +203,8 @@ def generate_weights(eff_json_filename, corr_json_filename):
         fail_hist = input_file.Get('llfitdata_fail'+bin_string)
         fit_result_fail = do_tnp_fit(fail_hist,fit_funcs[ifit],
             'plots/photon_corr/presel_fail_'+fit_types[ifit]+'_tnp'+bin_string+'.pdf',
-            'curve',True)
+            'curve',True,prefit_strings[prefit_idx])
+        prefit_idx += 1
         if (fit_result_fail[0] != 0):
           raise RuntimeError('Fit failed.')
 
@@ -204,8 +215,9 @@ def generate_weights(eff_json_filename, corr_json_filename):
       #do MC
       mc_pass_hist = input_file.Get('llfitsimu_pass'+bin_string)
       mc_fit_result_pass = do_tnp_fit(mc_pass_hist,'CB+CMS',
-          'plots/photon_corr/presel_mc_pass_'+fit_types[ifit]+'_tnp'+bin_string+'.pdf',
-          'curve',True)
+          'plots/photon_corr/presel_mc_pass_'+fit_types[0]+'_tnp'+bin_string+'.pdf',
+          'curve',True,prefit_strings[prefit_idx])
+      prefit_idx += 1
       if (mc_fit_result_pass[0] != 0):
         raise RuntimeError('Fit failed.')
 
@@ -215,8 +227,9 @@ def generate_weights(eff_json_filename, corr_json_filename):
 
       mc_fail_hist = input_file.Get('llfitsimu_fail'+bin_string)
       mc_fit_result_fail = do_tnp_fit(mc_fail_hist,'CB+CMS',
-          'plots/photon_corr/presel_mc_fail_'+fit_types[ifit]+'_tnp'+bin_string+'.pdf',
-          'curve',True)
+          'plots/photon_corr/presel_mc_fail_'+fit_types[0]+'_tnp'+bin_string+'.pdf',
+          'curve',True,prefit_strings[prefit_idx])
+      prefit_idx += 1
       if (mc_fit_result_fail[0] != 0):
         raise RuntimeError('Fit failed.')
 
@@ -226,18 +239,21 @@ def generate_weights(eff_json_filename, corr_json_filename):
 
       #calculate yields and whatnot
       nominal_efficiency = pass_yield[0]/(pass_yield[0]+fail_yield[0])
-      stat_uncertainty = nominal_efficiency*sqrt(1.0/(max(pass_yield[0],1.0))+1.0/(max(fail_yield[0],1.0)))
+      stat_uncertainty = hypot(sqrt(pass_yield[0])/(pass_yield[0]+fail_yield[0]),
+                               hypot(sqrt(pass_yield[0]),sqrt(fail_yield[0]))/(pass_yield[0]+fail_yield[0])**2*pass_yield[0])
       altbkg_efficiency = pass_yield[1]/(pass_yield[1]+fail_yield[1])
       altsig_efficiency = pass_yield[2]/(pass_yield[2]+fail_yield[2])
       syst_uncertainty = 0.0
       if (nominal_efficiency != 0):
         syst_uncertainty = max(abs(nominal_efficiency-altbkg_efficiency)/nominal_efficiency,
                               abs(nominal_efficiency-altsig_efficiency)/nominal_efficiency)
+        syst_uncertainty *= nominal_efficiency
       mc_eff = mc_pass_yield/(mc_pass_yield+mc_fail_yield)
-      mc_unc = mc_eff*sqrt(1.0/max(mc_pass_yield,1.0)+1.0/max(mc_fail_yield,1.0))
+      mc_unc = hypot(sqrt(mc_pass_yield)/(mc_pass_yield+mc_fail_yield),
+                     hypot(sqrt(mc_pass_yield),sqrt(mc_fail_yield))/(mc_pass_yield+mc_fail_yield)**2*mc_pass_yield)
 
       data_efficiency.append(min(nominal_efficiency,1.0))
-      data_uncertainty.append(sqrt(stat_uncertainty**2+syst_uncertainty**2))
+      data_uncertainty.append(hypot(stat_uncertainty,syst_uncertainty))
       mc_efficiency.append(mc_eff)
       mc_uncertainty.append(mc_unc)
 
@@ -456,6 +472,9 @@ if __name__ == '__main__':
   if 'generate_weights' in steps:
     #temp_debug(args.mc_input_file)
     generate_weights(args.eff_json_file, args.corr_json_file)
+
+  if 'do_precalculated_fits' in steps:
+    generate_weights(args.eff_json_file, args.corr_json_file, 'temp_tnp.txt')
 
   if 'clean' in steps:
     subprocess.run('rm temp_zpeak_hists.root'.split())

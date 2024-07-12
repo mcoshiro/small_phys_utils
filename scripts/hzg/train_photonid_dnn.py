@@ -46,7 +46,8 @@ if __name__ =='__main__':
 
   train_columns = ['ph_r9','ph_s4','ph_sc_etaWidth','ph_sc_phiWidth','ph_sieie','ph_sieip','ph_phoIso','ph_chIso','ph_chWorIso','ph_sc_rawEnergy','ph_sc_eta']+['ph_et','ph_sc_abseta','event_rho']
   if args.region=='endcap':
-    train_columns = ['ph_r9','ph_s4','ph_sc_etaWidth','ph_sc_phiWidth','ph_sieie','ph_sieip','ph_phoIso','ph_chIso','ph_chWorIso','ph_sc_rawEnergy','ph_sc_eta','ph_ESsigma','ph_esEnergyOverRawE']+['ph_et','ph_sc_abseta','event_rho']
+    #train_columns = ['ph_r9','ph_s4','ph_sc_etaWidth','ph_sc_phiWidth','ph_sieie','ph_sieip','ph_phoIso','ph_chIso','ph_chWorIso','ph_sc_eta','ph_ESsigma','ph_esEnergyOverRawE']+['ph_et','ph_sc_abseta','event_rho']
+    train_columns = ['ph_r9','ph_s4','ph_sc_etaWidth','ph_sc_phiWidth','ph_sieie','ph_sieip','ph_phoIso','ph_chIso','ph_chWorIso','ph_sc_eta','ph_esEnergyOverRawE']+['ph_et','ph_sc_abseta','event_rho','ph_ESsigma']
 
   #read files
   simu_file = uproot.open(args.mc_file)
@@ -69,10 +70,10 @@ if __name__ =='__main__':
   #data_ntrain = int(round(data_data_frame.shape[0] * 0.6))
   #simu_nvalid = int(round(simu_data_frame.shape[0] * 0.7))
   #data_nvalid = int(round(data_data_frame.shape[0] * 0.7))
-  simu_train_data = simu_data_frame[simu_data_frame.event%10<=4]
-  data_train_data = data_data_frame[data_data_frame.event%10<=4]
-  simu_valid_data = simu_data_frame[(simu_data_frame.event%10==5)|(simu_data_frame.event%10==6)]
-  data_valid_data = data_data_frame[(data_data_frame.event%10==5)|(data_data_frame.event%10==6)]
+  simu_train_data = simu_data_frame[simu_data_frame.event%10<=5]
+  data_train_data = data_data_frame[data_data_frame.event%10<=5]
+  simu_valid_data = simu_data_frame[(simu_data_frame.event%10==6)|(simu_data_frame.event%10==7)]
+  data_valid_data = data_data_frame[(data_data_frame.event%10==6)|(data_data_frame.event%10==7)]
   #simu_tests_data = simu_data_frame[simu_nvalid:]
   #data_tests_data = data_data_frame[data_nvalid:]
   #for i in range(5):
@@ -115,8 +116,8 @@ if __name__ =='__main__':
   #build MVA model
   print('Building model.')
   n_input = len(train_columns)
-  width = [10,10,10]
-  dropout = 0.04
+  width = [15,15,15]
+  dropout = 0.017
   depth = len(width) 
   model = Sequential()
   model.add(Dense(units=width[0], 
@@ -128,12 +129,12 @@ if __name__ =='__main__':
     model.add(Dense(units=width[i], 
               #kernel_regularizer=L1L2(0.0,0.001),
               activation='elu'))
-    model.add(Dropout(dropout))
+  model.add(Dropout(dropout))
   model.add(Dense(1, activation='sigmoid'))
 
   #perform training
   print('Training model.')
-  model.compile(loss=weighted_bce_loss(),optimizer=Adam(learning_rate=0.00005,clipnorm=5.0),metrics=[])
+  model.compile(loss=weighted_bce_loss(),optimizer=Adam(learning_rate=0.0001,clipnorm=10.0),metrics=[])
   callbacks = [
       # if we don't have a decrease of the loss for 7 epochs, terminate training.
       EarlyStopping (verbose=True, patience=7, monitor='val_loss'),

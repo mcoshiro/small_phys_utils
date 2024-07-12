@@ -104,6 +104,7 @@ def fit_quality(canvas, hist_name, curve_name, nbins, x_min, x_max):
   step_size = (x_max-x_min)/float(nbins)
   for ibin in range(nbins):
     x = x_min +step_size*float(ibin)
+    diff = 0.0
     diff = abs(get_value_tgraph(data_roohist, x)/data_integral-get_value_tgraph(fit_roocurve, x)/fit_integral)
     integral_diff += (diff+prev_diff)/2.0*step_size
     prev_diff = diff
@@ -124,6 +125,8 @@ def fit_cmsshape_cb(hist, return_type='pdf', verbose=False, output_dir='plots/')
   if not return_type in ['pdf','curve']:
     raise ValueError('Invalid argument to fit_cmsshape_cb, must be "pdf" or "curve".')
 
+  bin_lo = hist.GetBinLowEdge(1)
+  bin_hi = hist.GetBinLowEdge(hist.GetNbinsX())+hist.GetBinWidth(hist.GetNbinsX())
 
   #set up RooFit stuff
   workspace = ROOT.RooWorkspace()
@@ -230,7 +233,7 @@ def fit_cmsshape_cb(hist, return_type='pdf', verbose=False, output_dir='plots/')
   #for itry in range(max_tries):
 
   #  workspace.loadSnapshot('initial_guess')
-  #  quality = perform_automatic_fit(workspace, x_name, param_names, jitter, 
+  #  quality = perform_automatic_fit(workspace, x_name, param_names, bin_lo, bin_hi, jitter, 
   #                                  True, 
   #                                  'plots/photon_corr/'+hist.GetName()+'_try'+str(itry))
 
@@ -268,7 +271,7 @@ def fit_cmsshape_cb(hist, return_type='pdf', verbose=False, output_dir='plots/')
 
   #try manual fit
   workspace.loadSnapshot('initial_guess')
-  quality = perform_interactive_fit(workspace, x_name, param_names)
+  quality = perform_interactive_fit(workspace, x_name, param_names, bin_lo, bin_hi)
   if (quality<best_quality):
     best_quality = quality
     best_try = -2
@@ -301,14 +304,15 @@ def fit_cmsshape_cb(hist, return_type='pdf', verbose=False, output_dir='plots/')
   print('Fit failed, best automatic try: '+str(best_try)+', quality: '+str(best_quality))
   return (1,pdf_sb)
 
-def do_tnp_fit(hist, function_type, output_name, return_type='pdf', verbose=False):
+def do_tnp_fit(hist, function_type, output_name, return_type='pdf', verbose=False, load_text=''):
   '''Fit a CMSshape (erf*exp) plus crystal ball distribution to the given TH1
   params
   hist           TH1D, histogram to fit
   function_type  string, functions to use in fit - see below for supported
+  output_name    name of canvas to save
   return_type    string, 'pdf' or 'curve'
   verbose        bool, print/save extra information
-  output_dir     string, location ot save output
+  load_text      string, pre-prepared parameters
 
   Supported functional forms: 'CB+CMS' 'CB+logisticexp' 'Gauss+CMS'
 
@@ -319,7 +323,7 @@ def do_tnp_fit(hist, function_type, output_name, return_type='pdf', verbose=Fals
   if not return_type in ['pdf','curve']:
     raise ValueError('Invalid argument to fit_cmsshape_cb, must be "pdf" or "curve".')
 
-  if not function_type in ['CB+CMS','CB+logisticexp','Gauss+CMS']:
+  if not function_type in ['CB+CMS','CB+logisticexp','Gauss+CMS','Gauss+CMSmmy']:
     raise ValueError('Invalid function_type argument to do_tnp_fit.')
 
   #set up RooFit stuff
@@ -330,6 +334,9 @@ def do_tnp_fit(hist, function_type, output_name, return_type='pdf', verbose=Fals
   getattr(workspace,'import')(data)
   x_name = 'mll'
   param_names = []
+
+  bin_lo = hist.GetBinLowEdge(1)
+  bin_hi = hist.GetBinLowEdge(hist.GetNbinsX())+hist.GetBinWidth(hist.GetNbinsX())
 
   if function_type=='CB+CMS':
     gauss_mu = ROOT.RooRealVar('gauss_mu', 'Z peak Gaussian mean', 85.0, 95.0) 
@@ -406,6 +413,37 @@ def do_tnp_fit(hist, function_type, output_name, return_type='pdf', verbose=Fals
     pdf_sb = ROOT.RooAddPdf('pdf_sb', 'pdf_sb', ROOT.RooArgList(pdf_s, pdf_b), ROOT.RooArgList(gauss_norm, bak_norm))
     getattr(workspace,'import')(pdf_sb)
 
+  elif function_type=='Gauss+CMSmmy':
+    gauss_mu = ROOT.RooRealVar('gauss_mu', 'Z peak Gaussian mean', 85.0, 95.0) 
+    gauss_sigma = ROOT.RooRealVar('gauss_sigma', 'Z peak Gaussian width', 0.01, 15.0) 
+    gauss_norm = ROOT.RooRealVar('sig_norm', 'Z peak normalization', 0.0, 1000000000.0) 
+    erf_mu = ROOT.RooRealVar('erf_mu', 'Nonresonant (erf) turn-on midpoint', 30.0, 100.0)
+    erf_sigma = ROOT.RooRealVar('erf_sigma', 'Nonresonant (erf) turn-on width', 0.001, 2.0) 
+    exp_lambda = ROOT.RooRealVar('exp_lambda', 'Nonresonant exponential parameter', 0.0001, 100.0) 
+    bak_norm = ROOT.RooRealVar('bak_norm', 'Nonresonant normalization', 0.0, 1000000000.0) 
+    gauss_sigma.setVal(3.0)
+    gauss_norm.setVal(50000.0)
+    erf_mu.setVal(81.0)
+    erf_sigma.setVal(0.1)
+    exp_lambda.setVal(3.0)
+    bak_norm.setVal(50000.0)
+    getattr(workspace,'import')(gauss_mu)
+    getattr(workspace,'import')(gauss_sigma)
+    getattr(workspace,'import')(gauss_norm)
+    getattr(workspace,'import')(erf_mu)
+    getattr(workspace,'import')(erf_sigma)
+    getattr(workspace,'import')(exp_lambda)
+    getattr(workspace,'import')(bak_norm)
+    param_names = ['gauss_mu','gauss_sigma','sig_norm','erf_mu','erf_sigma',
+                   'exp_lambda','bak_norm']
+
+    pdf_s  = ROOT.RooGaussian('pdf_s','pdf_s', mll, gauss_mu, gauss_sigma)
+    pdf_b = ROOT.RooGenericPdf('pdf_b','pdf_b',
+        '(TMath::Erf((@0-@1)*@2)+1.0)/2.0*exp(-1.0*@3*(@0-50.0)/80.0)',
+           ROOT.RooArgList(mll, erf_mu, erf_sigma, exp_lambda))
+    pdf_sb = ROOT.RooAddPdf('pdf_sb', 'pdf_sb', ROOT.RooArgList(pdf_s, pdf_b), ROOT.RooArgList(gauss_norm, bak_norm))
+    getattr(workspace,'import')(pdf_sb)
+
   elif function_type=='CB+logisticexp':
     gauss_mu = ROOT.RooRealVar('gauss_mu', 'Z peak Gaussian mean', 85.0, 95.0) 
     gauss_sigma = ROOT.RooRealVar('gauss_sigma', 'Z peak Gaussian width', 0.01, 15.0) 
@@ -451,7 +489,14 @@ def do_tnp_fit(hist, function_type, output_name, return_type='pdf', verbose=Fals
   quality_threshold = 0.06
 
   #manual fit
-  quality = perform_interactive_fit(workspace, x_name, param_names)
+  quality = 1.0
+  if load_text == '':
+    quality = perform_interactive_fit(workspace, x_name, param_names, bin_lo, bin_hi)
+  else:
+    param_values = [float(value) for value in load_text.split(',')]
+    for ipar in range(len(param_names)):
+      workspace.var(param_names[ipar]).setVal(param_values[ipar])
+    quality = 0.0
   #if (quality<quality_threshold):
   plot_postfit = workspace.var(x_name).frame()
   data.plotOn(plot_postfit)
@@ -481,7 +526,7 @@ def do_tnp_fit(hist, function_type, output_name, return_type='pdf', verbose=Fals
   #print('Fit failed, best automatic try: '+str(best_try)+', quality: '+str(best_quality))
   #return (1,pdf_sb)
 
-def perform_automatic_fit(workspace, x_name, param_names, noise=0.0, verbose=False, output_name=''):
+def perform_automatic_fit(workspace, x_name, param_names, bin_lo, bin_hi, noise=0.0, verbose=False, output_name=''):
   '''Method to perform automated fit and quality check. Returns fit quality
   This method will overwrite workspace parameters, so save a snapshot beforehand
   if needed.
@@ -491,6 +536,8 @@ def perform_automatic_fit(workspace, x_name, param_names, noise=0.0, verbose=Fal
                sig_norm and bak_norm
   x_name       name of fit variable
   param_names  list of strings of names of fit parameters
+  bin_lo       float lower bound of data being fitted
+  bin_hi       float upper bound of data being fitted
   noise        float how much random noise to add to initial parameters
   verbose      bool for debugging purposes
   output_name  name to use with verbose output plots
@@ -536,10 +583,12 @@ def perform_automatic_fit(workspace, x_name, param_names, noise=0.0, verbose=Fal
     postfit_canvas.SaveAs(output_name+'_postfit.pdf')
 
   #evaluate goodness of fit
-  return fit_quality(postfit_canvas, 'h_data', 'postfit_sb', 78, 51.0, 129.0)
+  bin_range = (bin_hi-bin_lo)
+  return fit_quality(canvas, 'h_data', 'postfit_sb', 100,
+                     bin_lo+bin_range/20.0, bin_hi-bin_range/20.0)
 
 
-def perform_interactive_fit(workspace, x_name, param_names):
+def perform_interactive_fit(workspace, x_name, param_names, bin_lo, bin_hi):
   '''Method that can be used to allow user to tune parameters via shell for fit
   This method will overwrite workspace parameters, so save a snapshot beforehand
   if needed.
@@ -548,12 +597,15 @@ def perform_interactive_fit(workspace, x_name, param_names):
                must include a RooAbsHist data and RooAbsPdf pdf_sb
   x_name       name of fit variable
   param_names  list of strings of names of fit parameters
+  bin_lo       lower bound of data being fitted
+  bin_hi       upper bound of data being fitted
   '''
   quit = False
   have_fit = False
   canvas = ROOT.TCanvas()
   data = workspace.data('data')
   pdf_sb = workspace.pdf('pdf_sb')
+  bin_range = (bin_hi-bin_lo)
   quality = 1.0
   while not quit:
     user_input = input()
@@ -566,14 +618,27 @@ def perform_interactive_fit(workspace, x_name, param_names):
       #workspace.Print('v') 
     if user_input[0]=='help' or user_input[0]=='h':
       print('This is an interactive fitting session. Commands include:')
-      print('(f)it                attempt a fit')
-      print('(l)ist               display values of variables')
-      #print('(n)orm               automatically fix norms')
-      print('(q)uit               exit interactive fitting session')
-      print('(a)utoload <values>  set all variables at once (or output)')
-      print('(r)evert             revert to prefit parameter values')
-      print('(s)et <var> <value>  set variable <var> to <value>')
-      print('(w)rite <fname>      write current canvas to a file')
+      print('(f)it                    attempt a fit')
+      print('(l)ist                   display values of variables')
+      print('(c)onstant <var> <value> set a value to constant or not')
+      #print('(n)orm                   automatically fix norms')
+      print('(q)uit                   exit interactive fitting session')
+      print('(a)utoload <values>      set all variables at once (or output)')
+      print('(r)evert                 revert to prefit parameter values')
+      print('(s)et <var> <value>      set variable <var> to <value>')
+      print('(w)rite <fname>          write current canvas to a file')
+    if user_input[0]=='constant' or user_input[0]=='c':
+      if len(user_input)<3:
+        print('ERROR: (c)onstant takes two arguments: set <var> <value>')
+        continue
+      if not (user_input[1] in param_names):
+        print('ERROR: unknown parameter '+user_input[1])
+        continue
+      constant_value = True
+      if (user_input[2] == 'False' or user_input[2] == 'false'
+          or user_input[2] == 'F' or user_input[2] == 'f'):
+        constant_value = False
+      workspace.var(user_input[1]).setConstant()
     if user_input[0]=='set' or user_input[0]=='s':
       if len(user_input)<3:
         print('ERROR: (s)et takes two arguments: set <var> <value>')
@@ -595,7 +660,8 @@ def perform_interactive_fit(workspace, x_name, param_names):
         canvas.cd()
         plot.Draw()
         canvas.Update()
-        quality = fit_quality(canvas, 'h_data', 'prefit_sb', 78, 51.0, 129.0)
+        quality = fit_quality(canvas, 'h_data', 'prefit_sb', 100,
+                              bin_lo+bin_range/20.0, bin_hi-bin_range/20.0)
         print('quality: '+str(quality))
       except ValueError:
         print('Unable to cast value, skipping')
@@ -633,7 +699,8 @@ def perform_interactive_fit(workspace, x_name, param_names):
           canvas.cd()
           plot.Draw()
           canvas.Update()
-          quality = fit_quality(canvas, 'h_data', 'prefit_sb', 78, 51.0, 129.0)
+          quality = fit_quality(canvas, 'h_data', 'prefit_sb', 100,
+                                bin_lo+bin_range/20.0, bin_hi-bin_range/20.0)
           print('quality: '+str(quality))
     if user_input[0]=='fit' or user_input[0]=='f':
       workspace.saveSnapshot('prefit',','.join(param_names))
@@ -649,7 +716,8 @@ def perform_interactive_fit(workspace, x_name, param_names):
       canvas.cd()
       plot.Draw()
       canvas.Update()
-      quality = fit_quality(canvas, 'h_data', 'postfit_sb', 78, 51.0, 129.0)
+      quality = fit_quality(canvas, 'h_data', 'postfit_sb', 100,
+                            bin_lo+bin_range/20.0, bin_hi-bin_range/20.0)
       print('quality: '+str(quality))
       have_fit = True
     if user_input[0]=='revert' or user_input[0]=='r':
@@ -681,6 +749,15 @@ def perform_interactive_fit(workspace, x_name, param_names):
         continue
       canvas.SaveAs(user_input[1])
     if user_input[0]=='quit' or user_input[0]=='q':
+      with open('temp_tnp.txt','a') as text_file:
+        first = True
+        for param_name in param_names:
+          if first:
+            first = False
+          else:
+            text_file.write(',')
+          text_file.write(str(workspace.var(param_name).getValV()))
+        text_file.write('\n')
       quit = True
   return quality
 

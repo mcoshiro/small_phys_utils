@@ -23,6 +23,12 @@ def get_palette_official(nplots):
     return [ROOT.TColor.GetColor('#5790fc'), ROOT.TColor.GetColor('#f89c20'), 
             ROOT.TColor.GetColor('#e42536'), ROOT.TColor.GetColor('#964a8b'), 
             ROOT.TColor.GetColor('#9c9ca1'), ROOT.TColor.GetColor('#7a21dd')]
+  elif (nplots <= 10):
+    return [ROOT.TColor.GetColor('#3f90da'), ROOT.TColor.GetColor('#ffa90e'), 
+            ROOT.TColor.GetColor('#bd1f01'), ROOT.TColor.GetColor('#832db6'), 
+            ROOT.TColor.GetColor('#94a4a2'), ROOT.TColor.GetColor('#a96b59'),
+            ROOT.TColor.GetColor('#e76300'), ROOT.TColor.GetColor('#b9ac70'),
+            ROOT.TColor.GetColor('#717581'), ROOT.TColor.GetColor('#92dadd')]
   raise ValueError('More colors than allowed in official colors.')
 
 def get_palette_lines(nplots):
@@ -54,7 +60,7 @@ class RplPlot:
     '''
     self.plot_bottom = False
     self.y_title = 'Events/bin'
-    self.y_title_lower = 'data/MC'
+    self.y_title_lower = 'Data/MC'
     self.x_title = 'x variable'
     self.x_min = -999.0
     self.x_max = -999.0
@@ -73,16 +79,43 @@ class RplPlot:
     self.legend_yhi = 0.90
     self.legend_customsize = False
     self.legend_ncolumns = -1
-    self.point_hists = []
-    self.point_hist_color = []
-    self.line_hists = []
-    self.line_hist_color = []
+    self.hists = []
+    self.hist_color = []
+    self.hist_style = [] #point, outline, filled
+    self.color_index = 0
+    self.palette = get_palette_official(6)
     self.graphs = []
     self.graph_color = []
     self.bottom_plots = []
     self.bottom_is_ratio = True
-    self.bottom_plot_color_index = []
+    self.bottom_plot_color = []
     self.n_plots = 0
+
+  def plot_hist(self, hist, color=None, style='point'):
+    '''plots a TH1
+
+    @params
+    hist - root TH1 to plot, title is used as legend entry
+    color - custom color to use for plot, None uses a default
+    style - point, outline, filled. Sets style of plot
+    '''
+    if (color==None):
+      if (self.color_index >= 6):
+        raise RuntimeError('Error: too many plots for selected palette')
+      self.hist_color.append(self.palette[self.color_index])
+      self.color_index += 1
+    else:
+      self.hist_color.append(color)
+    if (style not in ['point','outline','filled']):
+      raise ValueError('Unsupported plot style')
+    self.hist_style.append(style)
+    self.hists.append(hist)
+    if self.n_plots == 0:
+      xaxis_title = hist.GetXaxis().GetTitle()
+      if self.x_title == 'x variable' and xaxis_title != '':
+        self.x_title = xaxis_title
+    self.n_plots += 1
+    return self
 
   def plot_points(self, hist, color=None):
     '''plots a TH1 as data points
@@ -91,14 +124,7 @@ class RplPlot:
     hist - root TH1 to plot, title is used as legend entry
     color - custom color to use for plot, None uses a default
     '''
-    self.point_hist_color.append(color)
-    self.point_hists.append(hist)
-    if self.n_plots == 0:
-      xaxis_title = hist.GetXaxis().GetTitle()
-      if self.x_title == 'x variable' and xaxis_title != '':
-        self.x_title = xaxis_title
-    self.n_plots += 1
-    return self
+    return self.plot_hist(hist, color, 'point')
 
   def plot_outline(self, hist, color=None):
     '''plots a TH1 as an outline
@@ -107,14 +133,10 @@ class RplPlot:
     hist - root TH1 to plot, title is used as legend entry
     color - custom color to use for plot, None uses a default
     '''
-    self.line_hist_color.append(color)
-    self.line_hists.append(hist)
-    if self.n_plots == 0:
-      xaxis_title = hist.GetXaxis().GetTitle()
-      if self.x_title == 'x variable' and xaxis_title != '':
-        self.x_title = xaxis_title
-    self.n_plots += 1
-    return self
+    return self.plot_hist(hist, color, 'outline')
+
+  def plot_filled(self, hist, color=None):
+    return self.plot_hist(hist, color, 'filled')
 
   def plot_graph(self, graph, color=None):
     '''plots a TGraph
@@ -123,84 +145,97 @@ class RplPlot:
     graph - root TGraph to plot, title is used as legend entry
     color - custom color to use for plot, None uses a default
     '''
-    self.graph_color.append(color)
+    if (color==None):
+      if (self.color_index >= 6):
+        raise RuntimeError('Error: too many plots for selected palette')
+      self.graph_color.append(self.palette[self.color_index])
+      self.color_index += 1
+    else:
+      self.graph_color.append(color)
     self.graphs.append(graph)
     if self.n_plots == 0:
-      xaxis_title = hist.GetXaxis().GetTitle()
+      xaxis_title = graph.GetXaxis().GetTitle()
       if self.x_title == 'x variable' and xaxis_title != '':
         self.x_title = xaxis_title
     self.n_plots += 1
     return self
 
-  def add_ratio(self, numerator_name, denominator_name):
+  def add_ratio(self, numerator_name, denominator_name, switch_colors=False):
     '''adds a ratio of two plot elements to the plot
 
     @params
-    numerator_name - name of plot element to use as numerator
-    denominator_name - name of plot element to use as denominator
+    numerator_name    name of plot element to use as numerator
+    denominator_name  name of plot element to use as denominator
+    switch_colors     switch colors of numerator and denominator
     '''
     numerator_hist = None
     denominator_hist = None
-    numerator_color_index = -1
-    denominator_color_index = -1
-    color_index = 0
-    for hist in self.point_hists:
+    numerator_color = 1
+    denominator_color = 1
+    for hist, color in zip(self.hists, self.hist_color):
       if (hist.GetName()==numerator_name):
         numerator_hist = hist
-        numerator_color_index = color_index
+        numerator_color = color
       if (hist.GetName()==denominator_name):
         denominator_hist = hist
-        denominator_color_index = color_index
-      color_index += 1
-    for hist in self.line_hists:
-      if (hist.GetName()==numerator_name):
-        numerator_hist = hist
-        numerator_color_index = color_index
-      if (hist.GetName()==denominator_name):
-        denominator_hist = hist
-        denominator_color_index = color_index
-      color_index += 1
+        denominator_color = color
     if (numerator_hist != None and denominator_hist != None):
+      #add uncertainties for reference on first plot
+      if len(self.bottom_plots)==0:
+        self.bottom_plots.append(denominator_hist.Clone())
+        self.bottom_plots[-1].Divide(denominator_hist)
+        if not switch_colors:
+          self.bottom_plot_color.append(numerator_color)
+        else:
+          self.bottom_plot_color.append(denominator_color)
       self.bottom_plots.append(numerator_hist.Clone())
       self.bottom_plots[-1].Divide(denominator_hist)
-      self.bottom_plot_color_index.append(denominator_color_index)
+      if not switch_colors:
+        self.bottom_plot_color.append(denominator_color)
+      else:
+        self.bottom_plot_color.append(numerator_color)
       self.plot_bottom = True
     else:
       raise ValueError('Could not find numerator and denominator plots requested for ratio.')
     #TODO implement ratios of graphs
     return self
 
-  def add_difference(self, minuend_name, subtrahend_name):
+  def add_difference(self, minuend_name, subtrahend_name, switch_colors=False):
     '''adds a ratio of two plot elements to the plot
 
     @params
-    minuend_name - name of plot element to use as minuend
-    subtrahend_name - name of plot element to use as subtrahend
+    minuend_name      name of plot element to use as minuend
+    subtrahend_name   name of plot element to use as subtrahend
+    switch_colors     switch colors of numerator and denominator
     '''
     self.bottom_is_ratio = False
-    self.y_title_lower = 'data-MC'
+    self.y_title_lower = 'Data-MC'
     minuend_hist = None
     subtrahend_hist = None
-    minuend_color_index = -1
-    color_index = 0
-    for hist in self.point_hists:
+    minuend_color = 1
+    subtrahend_color = 1
+    for hist, color in zip(self.hists, self.hist_color):
       if (hist.GetName()==minuend_name):
         minuend_hist = hist
-        minuend_color_index = color_index
-      if (hist.GetName()==subtrahend_name):
-        subtrahend_hist = hist
-      color_index += 1
-    for hist in self.line_hists:
-      if (hist.GetName()==minuend_name):
-        minuend_hist = hist
-        minuend_color_index = color_index
-      if (hist.GetName()==subtrahend_name):
-        subtrahend_hist = hist
-      color_index += 1
+        minuend_color = color
+      if (hist.GetName()==subrahend_name):
+        subrahend_hist = hist
+        subrahend_color = color
     if (minuend_hist != None and subtrahend_hist != None):
+      #add uncertainties for reference on first plot
+      if len(self.bottom_plots)==0:
+        self.bottom_plots.append(strahend_hist.Clone())
+        self.bottom_plots[-1].Add(subtrahend_hist,-1.0)
+        if not switch_colors:
+          self.bottom_plot_color.append(minuend_color)
+        else:
+          self.bottom_plot_color.append(subtrahend_color)
       self.bottom_plots.append(minuend_hist.Clone())
       self.bottom_plots[-1].Add(subtrahend_hist, -1.0)
-      self.bottom_plot_color_index.append(minuend_color_index)
+      if not switch_colors:
+        self.bottom_plot_color.append(subtrahend_color)
+      else:
+        self.bottom_plot_color.append(minuend_color)
       self.plot_bottom = True
     else:
       raise ValueError('Could not find minuend and subtrahend plots requested for difference.')
@@ -222,12 +257,9 @@ class RplPlot:
       if self.log_y:
         self.y_min = 0.01
       self.y_max = 0 
-      for point_hist in self.point_hists:
-        if point_hist.GetMaximum()>self.y_max:
-          self.y_max = point_hist.GetMaximum()
-      for line_hist in self.line_hists:
-        if line_hist.GetMaximum()>self.y_max:
-          self.y_max = line_hist.GetMaximum()
+      for hist in self.hists:
+        if hist.GetMaximum()>self.y_max:
+          self.y_max = hist.GetMaximum()
       for graph in self.graphs:
         graph_max = ROOT.TMath.MaxElement(graph.GetN(), graph.GetY())
         if graph_max>self.y_max:
@@ -240,16 +272,9 @@ class RplPlot:
       self.x_min = 999999.0
       self.x_max = -999999.0
       #TODO implement something more robust, for now, just use first hist
-      for point_hist in self.point_hists:
-        lo_edge = point_hist.GetXaxis().GetBinLowEdge(1)
-        hi_edge = point_hist.GetXaxis().GetBinUpEdge(point_hist.GetXaxis().GetNbins())
-        if (lo_edge < self.x_min):
-          self.x_min = lo_edge
-        if (hi_edge > self.x_max):
-          self.x_max = hi_edge
-      for line_hist in self.line_hists:
-        lo_edge = line_hist.GetXaxis().GetBinLowEdge(1)
-        hi_edge = line_hist.GetXaxis().GetBinUpEdge(line_hist.GetXaxis().GetNbins())
+      for hist in self.hists:
+        lo_edge = hist.GetXaxis().GetBinLowEdge(1)
+        hi_edge = hist.GetXaxis().GetBinUpEdge(hist.GetXaxis().GetNbins())
         if (lo_edge < self.x_min):
           self.x_min = lo_edge
         if (hi_edge > self.x_max):
@@ -269,6 +294,7 @@ class RplPlot:
     dummy_hist_upper.SetLabelSize(0.028,'y')
     dummy_hist_upper.SetTitleSize(0.032,'y')
     dummy_hist_upper.GetYaxis().SetTitle(self.y_title)
+    ROOT.TGaxis.SetExponentOffset(-0.05,0.0,'y')
     dummy_hist_upper.GetYaxis().SetNdivisions(606)
     dummy_hist_upper.GetXaxis().SetNdivisions(606)
     if (not self.plot_bottom):
@@ -323,11 +349,6 @@ class RplPlot:
     dummy_hist_upper.Draw()
 
     #draw plots and legend
-    if (self.n_plots<0):
-      raise ValueError('Must have positive number of plots.')
-    if (self.n_plots>10):
-      raise ValueError('Not enough colors for the number of plots.')
-    palette = get_palette_official(self.n_plots)
     if (self.legend_ncolumns == -1):
       self.legend_ncolumns = self.n_plots//4+1
     if (not self.legend_customsize):
@@ -342,35 +363,28 @@ class RplPlot:
       n_columns = self.n_plots//4+1
       leg.SetNColumns(n_columns)
     color_index = 0
-    custom_colors = self.point_hist_color+self.line_hist_color+self.graph_color
-    for point_hist in self.point_hists:
-      if (custom_colors[color_index]!=None):
-        palette[color_index] = custom_colors[color_index]
-      point_hist.SetLineWidth(3)
-      point_hist.SetLineColor(palette[color_index])
-      point_hist.SetMarkerColor(palette[color_index])
-      point_hist.SetMarkerStyle(ROOT.kFullCircle)
-      point_hist.Draw('same P')
-      leg.AddEntry(point_hist, point_hist.GetTitle(), 'LP')
-      color_index += 1
-    for line_hist in self.line_hists:
-      if (custom_colors[color_index]!=None):
-        palette[color_index] = custom_colors[color_index]
-      line_hist.SetLineWidth(3)
-      line_hist.SetLineColor(palette[color_index])
-      line_hist.Draw('same hist')
-      leg.AddEntry(line_hist, line_hist.GetTitle(), 'F')
-      color_index += 1
-    for graph in self.graphs:
-      if (custom_colors[color_index]!=None):
-        palette[color_index] = custom_colors[color_index]
+    for hist, color, style in zip(self.hists, self.hist_color, self.hist_style):
+      hist.SetLineWidth(3)
+      hist.SetLineColor(color)
+      if style=='point':
+        hist.SetMarkerColor(color)
+        hist.SetMarkerStyle(ROOT.kFullCircle)
+        hist.Draw('same P')
+        leg.AddEntry(hist, hist.GetTitle(), 'LP')
+      elif style=='outline':
+        hist.Draw('same hist')
+        leg.AddEntry(hist, hist.GetTitle(), 'F')
+      elif style=='filled':
+        hist.SetFillColor(color)
+        hist.Draw('same hist')
+        leg.AddEntry(hist, hist.GetTitle(), 'F')
+    for graph, color in zip(self.graphs, self.graph_color):
       graph.SetLineWidth(3)
-      graph.SetLineColor(palette[color_index])
-      graph.SetMarkerColor(palette[color_index])
+      graph.SetLineColor(color)
+      graph.SetMarkerColor(color)
       graph.SetMarkerStyle(ROOT.kFullCircle)
       graph.Draw('same P')
       leg.AddEntry(graph, graph.GetTitle(), 'LP')
-      color_index += 1
     leg.SetBorderSize(0)
     leg.Draw('same')
 
@@ -406,7 +420,8 @@ class RplPlot:
         lumi_energy_string += ' + '
       lumi_energy_string += str(lumi_datum[0])+' fb^{-1} ('+str(lumi_datum[1])+' TeV)'
     lumi_energy_string += '}'
-    label.DrawLatex(0.93,0.96,lumi_energy_string)
+    if not (self.title_type == 'cms simulation'):
+      label.DrawLatex(0.93,0.96,lumi_energy_string)
     top_pad.Modified()
 
     #draw lower plot
@@ -424,14 +439,20 @@ class RplPlot:
       line.SetLineColor(ROOT.kBlack)
       line.SetLineWidth(2)
       line.Draw('SAME')
-      bottom_index = 0
-      for bottom_plot in self.bottom_plots:
-        bottom_plot.SetLineWidth(3)
-        bottom_plot.SetLineColor(palette[self.bottom_plot_color_index[bottom_index]])
-        bottom_plot.SetMarkerColor(palette[self.bottom_plot_color_index[bottom_index]])
-        bottom_plot.SetMarkerStyle(ROOT.kFullCircle)
-        bottom_plot.Draw('same P')
-        bottom_index += 1
+      first_bottom = True
+      for bottom_plot, color in zip(self.bottom_plots, self.bottom_plot_color):
+        if first_bottom:
+          first_bottom = False
+          bottom_plot.SetMarkerSize(0)
+          bottom_plot.SetLineWidth(0)
+          bottom_plot.SetFillColorAlpha(color,0.33)
+          bottom_plot.Draw('same E2')
+        else:
+          bottom_plot.SetLineWidth(3)
+          bottom_plot.SetLineColor(color)
+          bottom_plot.SetMarkerColor(color)
+          bottom_plot.SetMarkerStyle(ROOT.kFullCircle)
+          bottom_plot.Draw('same P')
       bot_pad.Modified()
 
     #draw everything and save
