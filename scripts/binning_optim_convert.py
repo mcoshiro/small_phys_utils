@@ -13,7 +13,7 @@ def convert_csv_to_ntuple():
   df_dyg = pd.read_csv('ntuples/SMZg.csv')
   df_dyg = df_dyg.drop('Unnamed: 0',axis=1)
   df_dyg['type'] = 3
-  df_dyf = pd.read_csv('ntuples/DY.csv')
+  df_dyf = pd.read_csv('ntuples/DYx4.csv')
   df_dyf = df_dyf.drop('Unnamed: 0',axis=1)
   df_dyf['type'] = 4
   

@@ -12,6 +12,8 @@ HZG_COLOR_DICT = {'ggf' : ROOT.TColor.GetColor('#bd1f01'),
 
 MIN_SIGNAL = 1.0
 MIN_VALUE = 0.06143 #yield of single ZG event
+TRAIN_CUT = '(rdfentry_%8)>=4'
+TEST_CUT = '(rdfentry_%8)<=3'
 
 def make_validation_plots(df):
   '''
@@ -64,16 +66,16 @@ def analyze_2d_discriminant(df):
 
   df RDataFrame
   '''
-  sig_hist_tst = df.Filter('type<=2&&(rdfentry_%2)==0').Histo2D(
+  sig_hist_tst = df.Filter('type<=2&&'+TEST_CUT).Histo2D(
       ('sig_hist','; VBF score; Inclusive score',50,-1.0,1.0,50,-1.0,1.0),
       'VBF','twoj','w')
-  bkg_hist_tst = df.Filter('type>=3&&(rdfentry_%2)==0').Histo2D(
+  bkg_hist_tst = df.Filter('type>=3&&'+TEST_CUT).Histo2D(
       ('bkg_hist','; VBF score; Inclusive score',50,-1.0,1.0,50,-1.0,1.0),
       'VBF','twoj','w')
-  sig_hist_trn = df.Filter('type<=2&&(rdfentry_%2)==1').Histo2D(
+  sig_hist_trn = df.Filter('type<=2&&'+TRAIN_CUT).Histo2D(
       ('sig_hist','; VBF score; Inclusive score',50,-1.0,1.0,50,-1.0,1.0),
       'VBF','twoj','w')
-  bkg_hist_trn = df.Filter('type>=3&&(rdfentry_%2)==1').Histo2D(
+  bkg_hist_trn = df.Filter('type>=3&&'+TRAIN_CUT).Histo2D(
       ('bkg_hist','; VBF score; Inclusive score',50,-1.0,1.0,50,-1.0,1.0),
       'VBF','twoj','w')
   sig_hist_trn.Smooth()
@@ -93,10 +95,10 @@ def get_likelihood_evaluator(df):
   '''
   #to avoid cherry picking bins with fluctuations for observation, use odd 
   #events
-  sig_hist = df.Filter('type<=2&&(rdfentry_%2)==0').Histo2D(
+  sig_hist = df.Filter('type<=2&&'+TRAIN_CUT).Histo2D(
       ('sig_hist','; VBF score; Inclusive score',24,-1.0,1.0,24,-1.0,1.0),
       'VBF','twoj','w')
-  bkg_hist = df.Filter('type>=3&&(rdfentry_%2)==0').Histo2D(
+  bkg_hist = df.Filter('type>=3&&'+TRAIN_CUT).Histo2D(
       ('bkg_hist','; VBF score; Inclusive score',24,-1.0,1.0,24,-1.0,1.0),
       'VBF','twoj','w')
   return ROOT.HistLikelihoodRatio(sig_hist.GetPtr(), bkg_hist.GetPtr(), 
@@ -147,25 +149,25 @@ def analyze_1d_discriminant(df, column, nbins, lo_edge, hi_edge):
   hi_edge  high edge of histograms
 
   '''
-  ggf_1d_hist_ptr = df.Filter('type==1&&(rdfentry_%2)==1').Histo1D((
+  ggf_1d_hist_ptr = df.Filter('type==1&&'+TEST_CUT).Histo1D((
       'ggf_1d_hist',
       'gg#rightarrow H#rightarrow Z#gamma; 1D score; % Events/bin',
       nbins, lo_edge, hi_edge),column,'w')
-  vbf_1d_hist_ptr = df.Filter('type==2&&(rdfentry_%2)==1').Histo1D((
+  vbf_1d_hist_ptr = df.Filter('type==2&&'+TEST_CUT).Histo1D((
       'vbf_1d_hist',
       'VBF H#rightarrow Z#gamma; 1D score; % Events/bin',
       nbins, lo_edge, hi_edge),column,'w')
-  dyg_1d_hist_ptr = df.Filter('type==3&&(rdfentry_%2)==1').Histo1D((
+  dyg_1d_hist_ptr = df.Filter('type==3&&'+TEST_CUT).Histo1D((
       'dyg_1d_hist','Z#gamma; 1D score; % Events/bin',
       nbins, lo_edge, hi_edge),column,'w')
-  dyf_1d_hist_ptr = df.Filter('type==4&&(rdfentry_%2)==1').Histo1D((
+  dyf_1d_hist_ptr = df.Filter('type==4&&'+TEST_CUT).Histo1D((
       'dyf_1d_hist','Z+Fake photon; 1D score; % Events/bin',
       nbins, lo_edge, hi_edge),column,'w')
-  sig_trn_1d_hist_ptr = df.Filter('type<=2&&(rdfentry_%2)==0').Histo1D((
+  sig_trn_1d_hist_ptr = df.Filter('type<=2&&'+TRAIN_CUT).Histo1D((
       'sig_trn_1d_hist',
       'H#rightarrow Z#gamma; 1D score; % Events/bin',
       nbins, lo_edge, hi_edge),column,'w')
-  bkg_trn_1d_hist_ptr = df.Filter('type>=3&&(rdfentry_%2)==0').Histo1D((
+  bkg_trn_1d_hist_ptr = df.Filter('type>=3&&'+TRAIN_CUT).Histo1D((
       'bkg_trn_1d_hist',
       'Background; 1D score; % Events/bin',
       nbins, lo_edge, hi_edge),column,'w')

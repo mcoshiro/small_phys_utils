@@ -71,6 +71,46 @@ def get_graph_edges(graph):
       hi_edge = x+exhi
   return (lo_edge, hi_edge)
 
+def hist_simpledivide(hist1, hist2):
+  '''Divides hist1 by hist2, but ignores uncertainties on hist2. Returns
+  the result of the division. Error is taken from denominator
+
+  hist1  TH1
+  hist2  TH1, should have the same binning as hist1
+  '''
+  ret = hist1.Clone()
+  for ibin in range(0,hist1.GetNbinsX()+2):
+    h1_content = hist1.GetBinContent(ibin)
+    h2_content = hist2.GetBinContent(ibin)
+    h2_error = hist2.GetBinError(ibin)
+    if (h2_content != 0.0):
+      ret.SetBinContent(ibin, h1_content/h2_content)
+      ret.SetBinError(ibin, h1_content/h2_content/h2_content*h2_error)
+    else:
+      ret.SetBinContent(ibin, 0.0)
+      ret.SetBinError(ibin, 0.0)
+  return ret
+
+def hist_simpledivide_num(hist1, hist2):
+  '''Divides hist1 by hist2, but ignores uncertainties on hist2. Returns
+  the result of the division. Error is taken from numerator
+
+  hist1  TH1
+  hist2  TH1, should have the same binning as hist1
+  '''
+  ret = hist1.Clone()
+  for ibin in range(0,hist1.GetNbinsX()+2):
+    h1_content = hist1.GetBinContent(ibin)
+    h2_content = hist2.GetBinContent(ibin)
+    h1_error = hist1.GetBinError(ibin)
+    if (h2_content != 0.0):
+      ret.SetBinContent(ibin, h1_content/h2_content)
+      ret.SetBinError(ibin, h1_error/h2_content)
+    else:
+      ret.SetBinContent(ibin, 0.0)
+      ret.SetBinError(ibin, 0.0)
+  return ret
+
 class RplPlot:
   '''Simple class to hold plot options and apply to ROOT plots
   '''
@@ -129,7 +169,7 @@ class RplPlot:
       self.color_index += 1
     else:
       self.hist_color.append(color)
-    if (style not in ['point','outline','filled']):
+    if (style not in ['point','outline','outlineerror','filled']):
       raise ValueError('Unsupported plot style')
     self.hist_style.append(style)
     self.hists.append(hist)
@@ -149,14 +189,18 @@ class RplPlot:
     '''
     return self.plot_hist(hist, color, 'point')
 
-  def plot_outline(self, hist, color=None):
+  def plot_outline(self, hist, color=None, error=False):
     '''plots a TH1 as an outline
 
     @params
     hist - root TH1 to plot, title is used as legend entry
     color - custom color to use for plot, None uses a default
+    error - draws error band
     '''
-    return self.plot_hist(hist, color, 'outline')
+    if not error:
+      return self.plot_hist(hist, color, 'outline')
+    else:
+      return self.plot_hist(hist, color, 'outlineerror')
 
   def plot_filled(self, hist, color=None):
     return self.plot_hist(hist, color, 'filled')
@@ -207,14 +251,18 @@ class RplPlot:
         self.z_title = zaxis_title
     self.n_plots += 1
 
-  def add_ratio(self, numerator_name, denominator_name, switch_colors=False):
+  def add_ratio(self, numerator_name, denominator_name, switch_colors=False, 
+                multinumerator=None):
     '''adds a ratio of two plot elements to the plot
 
     @params
     numerator_name    name of plot element to use as numerator
     denominator_name  name of plot element to use as denominator
-    switch_colors     switch colors of numerator and denominator
-    '''
+    switch_colors     bool switch colors of numerator and denominator
+    multinumerator    bool uses numerators for ratio errors
+    ''' 
+    if (multinumerator==None):
+      multinumerator = switch_colors
     numerator_hist = None
     denominator_hist = None
     numerator_color = 1
@@ -229,14 +277,22 @@ class RplPlot:
     if (numerator_hist != None and denominator_hist != None):
       #add uncertainties for reference on first plot
       if len(self.bottom_plots)==0:
-        self.bottom_plots.append(denominator_hist.Clone())
-        self.bottom_plots[-1].Divide(denominator_hist)
+        if not multinumerator:
+          self.bottom_plots.append(hist_simpledivide(numerator_hist, 
+                                                     numerator_hist))
+        else: 
+          self.bottom_plots.append(hist_simpledivide_num(numerator_hist, 
+                                                         numerator_hist))
         if not switch_colors:
           self.bottom_plot_color.append(numerator_color)
         else:
           self.bottom_plot_color.append(denominator_color)
-      self.bottom_plots.append(numerator_hist.Clone())
-      self.bottom_plots[-1].Divide(denominator_hist)
+      if not multinumerator:
+        self.bottom_plots.append(hist_simpledivide(numerator_hist,
+                                                   denominator_hist))
+      else:
+        self.bottom_plots.append(hist_simpledivide_num(numerator_hist,
+                                                       denominator_hist))
       if not switch_colors:
         self.bottom_plot_color.append(denominator_color)
       else:
@@ -426,10 +482,17 @@ class RplPlot:
         if style=='point':
           hist.SetMarkerColor(color)
           hist.SetMarkerStyle(ROOT.kFullCircle)
-          hist.Draw('same P')
+          ROOT.gStyle.SetErrorX(0.01)
+          hist.Draw('same P E0')
+          ROOT.gStyle.SetErrorX(0.5)
           leg.AddEntry(hist, hist.GetTitle(), 'LP')
         elif style=='outline':
           hist.Draw('same hist')
+          leg.AddEntry(hist, hist.GetTitle(), 'F')
+        elif style=='outlineerror':
+          hist.SetMarkerColor(color)
+          hist.SetFillColorAlpha(color,0.33)
+          hist.Draw('same L E2')
           leg.AddEntry(hist, hist.GetTitle(), 'F')
         elif style=='filled':
           hist.SetFillColor(color)
