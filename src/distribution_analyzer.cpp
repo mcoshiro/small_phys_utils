@@ -51,17 +51,18 @@ void get_roc_auc(TH1D* signal, TH1D* background) {
  * @param scale             scale factor for signal and background to change effective lumi
  * @param nbins_throw       number of bins to remove from significance calculation
  */
-void binning_optimizer(TH1D* signal, TH1D* background, int max_nbins, 
-    float min_signal_yield, float scale, unsigned nbins_throw) {
+std::vector<int> binning_optimizer(TH1D* signal, TH1D* background, 
+    int max_nbins, float min_signal_yield, float scale, unsigned nbins_throw) {
 
-  for (int nbins = 1; nbins <= max_nbins; nbins++) {
+  //for (int nbins = 1; nbins <= max_nbins; nbins++) {
+  int nbins = max_nbins;
     std::cout << "With " << nbins << " bins: " << std::endl;
     if (nbins < 2) {
       float bin_s = signal->Integral()*scale;
       float bin_b = background->Integral()*scale;
       std::cout << "Optimal cuts(sig,bak): -1.1(" << bin_s << "," << bin_b << ")" << std::endl;
       std::cout << "Estimated significance: " << bin_s/sqrt(bin_b) << std::endl;
-      continue;
+      return {1,signal->GetNbinsX()};
     }
     int hist_nbins = signal->GetNbinsX();
     float max_significance = 0;
@@ -140,7 +141,8 @@ void binning_optimizer(TH1D* signal, TH1D* background, int max_nbins,
     }
     std::cout << std::endl;
     std::cout << "Estimated significance: " << max_significance << std::endl;
-  }
+  //}
+  return max_sig_cuts;
 }
 
 /**

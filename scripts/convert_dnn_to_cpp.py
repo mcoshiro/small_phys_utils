@@ -17,6 +17,9 @@ if __name__=='__main__':
       description='Converts an h5 Keras model into a header-only C++ library.')
   argument_parser.add_argument('-i','--input_filename',default='model.h5')
   argument_parser.add_argument('-s','--scaler_filename',default='')
+  argument_parser.add_argument('-t','--scaler_type',
+      choices=['scale','normscale'],default='scale')
+  argument_parser.add_argument('-v','--verbose',action='store_true')
   argument_parser.add_argument('-o','--output_filename',default='model.hpp')
   args = argument_parser.parse_args()
   class_name = args.output_filename[:-4]
@@ -32,12 +35,25 @@ if __name__=='__main__':
     scaler_file.seek(0)
     scaler_array.fromfile(scaler_file,size_in_doubles)
     scaler_file.close()
-    print(len(scaler_array))
-    print(scaler_array)
-    scaler_mean = scaler_array[:len(scaler_array)//2].tolist()
-    scaler_vari = scaler_array[len(scaler_array)//2:].tolist()
-    print(scaler_mean)
-    print(scaler_vari)
+    scaler_mean = []
+    scaler_vari = []
+    scaler_lamb = []
+    if args.scaler_type=='normscale':
+      ncolumns = len(scaler_array)//3
+      scaler_lamb = scaler_array[:ncolumns].tolist()
+      scaler_mean = scaler_array[ncolumns:2*ncolumns].tolist()
+      scaler_vari = scaler_array[2*ncolumns:].tolist()
+    else:
+      ncolumns = len(scaler_array)//2
+      scaler_mean = scaler_array[:ncolumns].tolist()
+      scaler_vari = scaler_array[ncolumns:].tolist()
+    if (args.verbose):
+      print(len(scaler_array))
+      print(scaler_array)
+      print(scaler_mean)
+      print(scaler_vari)
+      if args.scaler_type=='normscale':
+        print(scaler_lamb)
 
   #parse Keras model and generate relevant text
   n_neuron_layers = 0
@@ -52,6 +68,12 @@ if __name__=='__main__':
   initialize_code = ''
   initialize_code += '  n_layer('+str(n_neuron_layers)+'),\n'
   initialize_code += '  n_input('+str(n_input)+'),\n'
+  initialize_code += '  scale_lamb{'
+  for iinput in range(len(scaler_lamb)):
+    if (iinput != 0):
+      initialize_code += ','
+    initialize_code += str(scaler_lamb[iinput])
+  initialize_code += '},\n'
   initialize_code += '  scale_mean{'
   for iinput in range(len(scaler_mean)):
     if (iinput != 0):
@@ -155,6 +177,7 @@ if __name__=='__main__':
   output_code += '\n'
   output_code += '  unsigned n_layer;\n'
   output_code += '  unsigned n_input;\n'
+  output_code += '  std::vector<float> scale_lamb;\n'
   output_code += '  std::vector<float> scale_mean;\n'
   output_code += '  std::vector<float> scale_stdv;\n'
   output_code += '  std::vector<unsigned> n_unit;\n'
@@ -211,7 +234,14 @@ if __name__=='__main__':
   output_code += '  std::vector<float> output;\n'
   output_code += '  output.resize(n_input);\n'
   output_code += '  for (unsigned iin = 0; iin < n_input; iin++) {\n'
-  output_code += '    output[iin] = (input[iin]-scale_mean[iin])/scale_stdv[iin];\n'
+  if args.scaler_type=='normscale':
+    output_code += '    if (scale_lamb[iin] > 0 || scale_lamb[iin] < 0)\n'
+    output_code += '      output[iin] = (pow(input[iin], scale_lamb[iin])-1)/scale_lamb[iin];\n'
+    output_code += '    else\n'
+    output_code += '      output[iin] = log(input[iin]);\n'
+    output_code += '    output[iin] = (output[iin]-scale_mean[iin])/scale_stdv[iin];\n'
+  else:
+    output_code += '    output[iin] = (input[iin]-scale_mean[iin])/scale_stdv[iin];\n'
   output_code += '  }\n'
   output_code += '  return output;\n'
   output_code += '}\n'

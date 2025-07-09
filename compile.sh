@@ -26,4 +26,5 @@ g++ -o lib/libSmallPhysUtils.so -g `root-config --glibs` `root-config --ldflags`
 #g++ -o test.exe -g -O2 -pedantic -Wall -Iinc -L ./lib/ -lSmallPhysUtils test.cxx
 #g++ `root-config --cflags --glibs` -Iinc/ -Llib/ -lSmallPhysUtils -Wall src/hzg/hzg_distribution_analyzer.cxx -o bin/hzg_distribution_analyzer 
 #g++ -o bin/hzg_distribution_analyzer -c -O2 -isystem `root-config --incdir` `root-config --cflags` -pedantic -Wall -fPIC -Iinc src/hzg/hzg_distribution_analyzer.cxx
+g++ -o bin/hzg_minimizer -c -O2 -isystem `root-config --incdir` `root-config --cflags` -pedantic -Wall -fPIC -Iinc src/hzg_minimizer.cxx
 

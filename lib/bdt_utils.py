@@ -7,6 +7,7 @@ import os
 import ROOT
 import root_utils
 import subprocess
+from functools import reduce
 
 class BdtOptions:
   '''Simple class to hold BDT options
@@ -71,7 +72,8 @@ class BdtSummary:
     print('4 bin sig (train+test): '+str(self.bn4_signif)+' ('+str(self.bn4_signif/self.bn1_signif-1.0)+'%impovement)')
     print('K-S p-value (sig/bak): '+str(self.sig_ks)+'/'+str(self.bak_ks))
 
-def train_bdt(base_name, variables, weight, options, output_suffix=''):
+def train_bdt(base_name, variables, weight, options, output_suffix='', 
+              cut='1'):
   '''Function that trains a BDT
 
   @params
@@ -81,6 +83,7 @@ def train_bdt(base_name, variables, weight, options, output_suffix=''):
   weight - name of weight branch in file
   options - BDT options class
   output_suffix - optional tag for output file
+  cut - selection applied to signal and background
   '''
   ROOT.TMVA.Tools.Instance()
   sig_input_file = ROOT.TFile('ntuples/'+base_name+'_sig.root','READ')
@@ -97,8 +100,8 @@ def train_bdt(base_name, variables, weight, options, output_suffix=''):
   bdt_loader.SetSignalWeightExpression(weight)
   bdt_loader.AddSignalTree(sig_input_file.tree)
   bdt_loader.AddBackgroundTree(bak_input_file.tree)
-  cut_s = ROOT.TCut()
-  cut_b = ROOT.TCut()
+  cut_s = ROOT.TCut(cut)
+  cut_b = ROOT.TCut(cut)
   bdt_loader.PrepareTrainingAndTestTree(cut_s,cut_b,options.ptat_string())
   bdt_factory.BookMethod(bdt_loader,ROOT.TMVA.Types.kBDT,'BDT',options.bm_string())
   bdt_factory.TrainAllMethods()
@@ -397,6 +400,115 @@ def evaluate_bdt(base_name, variables, weight, options, output_suffix=''):
   subprocess.run('root -l -q bdt_evaluate_macro.cxx'.split())
   subprocess.run('rm bdt_evaluate_macro.cxx'.split())
   return bdt_summary
+
+def evaluate_bdt_new(base_name, variables, weight, options, cut_sr, 
+                     output_suffix=''):
+  '''Function that evaluates various metrics related to a BDT
+  Note: ASSUMES BLOCK SPLITTING IS USED
+
+  @params
+  base_name - filename of training samples, see train_bdt
+  variables - list of variables used in BDT
+  weight - name of weight branch
+  options - BdtOptions with options used for training
+  cut_sr - selection for signal region (inverted for sideband)
+  output_suffix - tag for output file
+
+  @returns
+  a BdtSummary of performance statistics
+  '''
+  #JIT C++ evaluator so we can use it through RDataFrame
+  cpp_snippet = 'TMVA::Reader bdt_reader;\n'
+  cpp_snippet += f'vector<float> bdt_args({len(variables)},0.0);\n'
+  for ivar in range(len(variables)):
+    cpp_snippet += f'bdt_reader.AddVariable("{variables[ivar]}",'
+    cpp_snippet += f'&bdt_args[{ivar}]);\n'
+  cpp_snippet += 'bdt_reader.BookMVA("BDT","dataset/weights/'
+  cpp_snippet += f'{base_name}{output_suffix}_BDT.weights.xml"'
+  cpp_snippet += ');\n'
+  ROOT.gInterpreter.ProcessLine(cpp_snippet)
+  cpp_snippet = 'float get_bdt_score(vector<float> args) {\n'
+  cpp_snippet += '  for (unsigned iarg = 0; iarg<bdt_args.size(); iarg++) {\n'
+  cpp_snippet += '    bdt_args[iarg] = args[iarg];\n'
+  cpp_snippet += '  }\n'
+  cpp_snippet += '  return bdt_reader.EvaluateMVA("BDT");\n'
+  cpp_snippet += '}\n'
+  ROOT.gInterpreter.Declare(cpp_snippet)
+
+  #do not multithread to get right rdfentry_
+  #get significance
+  df_sig = ROOT.RDataFrame('tree',f'ntuples/{base_name}_sig.root')
+  df_bak = ROOT.RDataFrame('tree',f'ntuples/{base_name}_bak.root')
+  df_dat = ROOT.RDataFrame('tree',f'ntuples/{base_name}_dat.root')
+  df_sig = df_sig.Define('bdt_score',
+      'get_bdt_score({'+','.join([var for var in variables])+'})')
+  df_bak = df_bak.Define('bdt_score',
+      'get_bdt_score({'+','.join([var for var in variables])+'})')
+  df_dat = df_dat.Define('bdt_score',
+      'get_bdt_score({'+','.join([var for var in variables])+'})')
+  df_sig_sr = df_sig.Filter(cut_sr)
+  df_bak_sr = df_bak.Filter(cut_sr)
+  df_bak_cr = df_bak.Filter(f'!({cut_sr})')
+  df_dat_cr = df_dat.Filter(f'!({cut_sr})')
+  ntrain_sig = options.nTrain_Signal
+  ntrain_bak = options.nTrain_Background
+  if (ntrain_sig==0):
+    ntrain_sig = df_sig_sr.Count().GetValue()//2.0
+  if (ntrain_bak==0):
+    ntrain_bak = df_bak_sr.Count().GetValue()//2.0
+  df_bak_sr_train = df_bak_sr.Filter(f'rdfentry_<={ntrain_bak}')
+  df_bak_sr_tests = df_bak_sr.Filter(f'rdfentry_>{ntrain_bak}')
+  df_sig_sr_train = df_sig_sr.Filter(f'rdfentry_<={ntrain_sig}')
+  df_sig_sr_tests = df_sig_sr.Filter(f'rdfentry_>{ntrain_sig}')
+  hist_model = ('','',110,-1.1,1.1)
+  hist_bak_sr_train_ptr = df_bak_sr_train.Histo1D(hist_model,'bdt_score',
+                                                  weight)
+  hist_sig_sr_train_ptr = df_sig_sr_train.Histo1D(hist_model,'bdt_score',
+                                                  weight)
+  ROOT.gInterpreter.ProcessLine('.L src/distribution_analyzer.cpp+')
+  n_bdt_bins = 4
+  bin_boundaries_vec = ROOT.binning_optimizer(hist_sig_sr_train_ptr.GetPtr(), 
+      hist_bak_sr_train_ptr.GetPtr(),n_bdt_bins,1.5,2.0,0)
+  bin_boundaries = [-1.0]
+  for ibin in range(bin_boundaries_vec.size()):
+    bin_boundaries.append(-1.1+2.2/110.0*float(bin_boundaries_vec.at(ibin)))
+  bin_boundaries.append(1.0)
+  print(bin_boundaries)
+  sig_train_yield_ptrs = []
+  sig_tests_yield_ptrs = []
+  bak_train_yield_ptrs = []
+  bak_tests_yield_ptrs = []
+  bak_cr_yield_ptrs = []
+  dat_yield_ptrs = []
+  for ibin in range(n_bdt_bins):
+    loedge = bin_boundaries[ibin]
+    hiedge = bin_boundaries[ibin+1]
+    cut_string = f'bdt_score>={loedge}&&bdt_score<{hiedge}'
+    sig_train_yield_ptrs.append(df_sig_sr_train.Filter(cut_string).Sum(weight))
+    sig_tests_yield_ptrs.append(df_sig_sr_tests.Filter(cut_string).Sum(weight))
+    bak_train_yield_ptrs.append(df_bak_sr_train.Filter(cut_string).Sum(weight))
+    bak_tests_yield_ptrs.append(df_bak_sr_tests.Filter(cut_string).Sum(weight))
+    bak_cr_yield_ptrs.append(df_bak_cr.Filter(cut_string).Sum(weight))
+    dat_yield_ptrs.append(df_dat_cr.Filter(cut_string).Sum(weight))
+  train_signif = 0.0
+  tests_signif = 0.0
+  tests_adj_signif = 0.0
+  for ibin in range(n_bdt_bins):
+    train_signif += ((sig_train_yield_ptrs[ibin].GetValue()
+        /((bak_train_yield_ptrs[ibin].GetValue())**0.5))**2)
+    tests_signif += ((sig_tests_yield_ptrs[ibin].GetValue()
+        /((bak_tests_yield_ptrs[ibin].GetValue())**0.5))**2)
+    bak_cr_ratio = (dat_yield_ptrs[ibin].GetValue()
+                    /(bak_cr_yield_ptrs[ibin].GetValue()))
+    print(f'Sideband scale factor: {bak_cr_ratio}')
+    tests_adj_signif += ((sig_tests_yield_ptrs[ibin].GetValue()
+        /(bak_cr_ratio*bak_tests_yield_ptrs[ibin].GetValue())**0.5)**2)
+  train_signif = (train_signif**0.5)*(2.0**0.5)
+  tests_signif = (tests_signif**0.5)*(2.0**0.5)
+  tests_adj_signif = (tests_adj_signif**0.5)*(2.0**0.5)
+  print(f'Train signif: {train_signif}')
+  print(f'Tests signif: {tests_signif}')
+  print(f'Adjs. signif: {tests_adj_signif}')
 
 def write_event_loop_boilerplate(out_file, base_name, columns, weight, output_suffix, mva_base_name=''):
   '''Helper function for writing event loop boilerplate

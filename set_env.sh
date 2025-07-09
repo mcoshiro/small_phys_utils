@@ -29,5 +29,11 @@ source /data1/jbkim/Linux/el7_v1/root-6.24.02/bin/thisroot.sh
 export LD_LIBRARY_PATH=/data1/jbkim/Linux/el7_v1/lib:$LD_LIBRARY_PATH
 export LD_LIBRARY_PATH=/data1/jbkim/Linux/el7_v1/lib64:$LD_LIBRARY_PATH
 
+#cross-computer new root?
+#export PATH=/homes/jbkim/Linux/el7_v2/bin${PATH:+:${PATH}}
+#export LD_LIBRARY_PATH=/homes/jbkim/Linux/el7_v2/lib:/homes/jbkim/Linux/el7_v2/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+#export PKG_CONFIG_PATH=/homes/jbkim/Linux/el7_v2/lib/pkgconfig:/homes/jbkim/Linux/el7_v2/lib64/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}
+#source /homes/jbkim/Linux/el7_v2/root-6.30.04/bin/thisroot.sh
+
 #workaround for strange Python HDF5 bug
 export HDF5_USE_FILE_LOCKING='FALSE'

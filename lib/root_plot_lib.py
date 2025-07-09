@@ -126,13 +126,15 @@ class RplPlot:
     self.x_max = -999.0
     self.y_min = -999.0
     self.y_max = -999.0
+    self.z_min = -999.0
+    self.z_max = -999.0
     self.y_min_lower = 0.75
     self.y_max_lower = 1.25
     self.log_x = False
     self.log_y = False
     self.log_y_bottom = False
     self.lumi_data = [(138,13)] #list of tuples in format (lumi [fbinv], energy [TeV])
-    self.title_type = 'cms work in progress'
+    self.title_type = 'cms private work'
     self.legend_xlo = 0.19
     self.legend_xhi = 0.91
     self.legend_ylo = 0.78
@@ -143,7 +145,7 @@ class RplPlot:
     self.hist_color = []
     self.hist_style = [] #point, outline, filled
     self.color_index = 0
-    self.palette = get_palette_official(6)
+    self.palette = get_palette_official(10)
     self.graphs = []
     self.graph_color = []
     self.bottom_plots = []
@@ -163,7 +165,7 @@ class RplPlot:
     if self.is_2d:
       raise RuntimeError('Cannot add both 2D and 1D plots')
     if (color==None):
-      if (self.color_index >= 6):
+      if (self.color_index >= 10):
         raise RuntimeError('Error: too many plots for selected palette')
       self.hist_color.append(self.palette[self.color_index])
       self.color_index += 1
@@ -470,11 +472,12 @@ class RplPlot:
       leg = ROOT.TLegend(self.legend_xlo,self.legend_ylo,self.legend_xhi,self.legend_yhi)
       leg.SetEntrySeparation(0)
       leg.SetTextSize(0.03)
-      if (self.legend_ncolumns > -1):
-        leg.SetNColumns(self.legend_ncolumns)
-      else:
+      n_columns = self.legend_ncolumns
+      if (self.legend_ncolumns==-1):
         n_columns = self.n_plots//4+1
-        leg.SetNColumns(n_columns)
+      leg.SetNColumns(n_columns)
+      if (n_columns > 2):
+        leg.SetTextSize(0.015)
       color_index = 0
       for hist, color, style in zip(self.hists, self.hist_color, self.hist_style):
         hist.SetLineWidth(3)
@@ -518,6 +521,9 @@ class RplPlot:
       self.hists[0].SetTitleSize(0.032,'z')
       self.hists[0].SetTitleOffset(2.0,'z')
       self.hists[0].GetZaxis().SetTitle(self.z_title)
+      if (self.z_min > -900.0 and self.z_max > -900.0):
+        self.hists[0].SetMinimum(self.z_min)
+        self.hists[0].SetMaximum(self.z_max)
       self.hists[0].Draw('colz')
 
     #draw CMS and lumi labels

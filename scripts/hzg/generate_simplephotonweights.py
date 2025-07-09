@@ -15,7 +15,7 @@ import json
 
 #constants
 #PT_BINS = [15.0,20.0,35.0,50.0,80.0,500.0]
-PT_BINS = [15.0,20.0,35.0,55.0,500.0]
+PT_BINS = [15.0,20.0,45.0,500.0]
 ETA_BINS = [-2.5,-2.0,-1.5,-0.8,0.0,0.8,1.5,2.0,2.5]
 ABSETA_BINS = [0.0,0.8,1.5,2.0,2.5]
 MVA_BINS_EB = [0.42,0.5,0.6,0.7,0.733,0.767,0.8,0.82,0.84,0.86,0.88,0.9,0.92,0.94,0.96,0.98,1.0]
@@ -411,18 +411,25 @@ def generate_polycorrections2():
   for ieta in range(len(ABSETA_BINS)-1):
     for ipt in range(len(PT_BINS)-1):
       ratio_hist = input_file.Get('data_onz_hist_2016_bin{}'.format(ibin))
-      fn = ROOT.TF1('gaussline','1.0+[2]/sqrt(2.0*3.1416*[1])*exp(-0.5*pow(x-[0],2)/[1]/[1])+[5]/sqrt(2.0*3.1416*[4])*exp(-0.5*pow(x-[3],2)/[4]/[4])',0.0,1.0)
-      fn.SetParameter(0,0.0)
-      fn.SetParameter(1,0.4)
-      fn.SetParameter(2,0.3)
-      fn.SetParameter(3,0.95)
-      fn.SetParameter(4,0.02)
-      fn.SetParameter(5,-0.05)
-      fn.SetParLimits(1,0.3,2.0) #don't allow first gaussian to be too small
-      fn.SetParLimits(4,0.01,2.0) #don't allow second gaussian to be too small
-      fn.SetParLimits(2,-0.5,0.5) #don't allow very large gaussians
-      fn.SetParLimits(5,-0.5,0.5) #don't allow very large gaussians
-      ratio_hist.Fit('gaussline')
+      #fn = ROOT.TF1('gaussline','1.0+[2]/sqrt(2.0*3.1416*[1])*exp(-0.5*pow(x-[0],2)/[1]/[1])+[5]/sqrt(2.0*3.1416*[4])*exp(-0.5*pow(x-[3],2)/[4]/[4])',0.0,1.0)
+      #fn.SetParameter(0,0.0)
+      #fn.SetParameter(1,0.4)
+      #fn.SetParameter(2,0.3)
+      #fn.SetParameter(3,0.95)
+      #fn.SetParameter(4,0.02)
+      #fn.SetParameter(5,-0.05)
+      #fn.SetParLimits(1,0.3,2.0) #don't allow first gaussian to be too small
+      #fn.SetParLimits(4,0.01,2.0) #don't allow second gaussian to be too small
+      #fn.SetParLimits(2,-0.5,0.5) #don't allow very large gaussians
+      #fn.SetParLimits(5,-0.5,0.5) #don't allow very large gaussians
+      #ratio_hist.Fit('gaussline')
+      fn = ROOT.TF1('modcheby','[0]+[1]*(2*x-1)+[2]*(2*pow(2*x-1,2)-1)+[3]*(4*pow(2*x-1,3)-3.0*(2*x-1))+[4]*pow(x,20)',0.0,1.0)
+      fn.SetParameter(0,1.0)
+      fn.SetParameter(1,0.0)
+      fn.SetParameter(2,0.0)
+      fn.SetParameter(3,0.0)
+      fn.SetParameter(4,0.5)
+      ratio_hist.Fit('modcheby')
       print(fn.GetChisquare())
       ROOT.gStyle.SetOptStat(0)
       can = ROOT.TCanvas()

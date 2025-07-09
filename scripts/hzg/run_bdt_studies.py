@@ -116,8 +116,23 @@ def phidtighten_studies():
   (bdt_utils.evaluate_bdt(base_name,variables,'w_lumi_year',bdt_options,tag)).print_summary()
   #bdt_utils.clean_bdt(base_name,tag)
 
+def modelling_studies():
+  bdt_options = bdt_utils.BdtOptions()
+  variables = ['photon_mva','min_dR','max_dR','pt_mass','cosTheta','costheta',
+               'phi','photon_res','photon_rapidity','l1_rapidity',
+               'l2_rapidity']
+  base_name = 'shuffled_bdtmodelling'
+  tag = '_modelling_def'
+  cut = 'mllg>120&&mllg<130'
+  w = 'w_default'
+  #bdt_utils.train_bdt(base_name,variables,w,bdt_options,tag,cut)
+  bdt_utils.evaluate_bdt_new(base_name,variables,w,bdt_options,cut,
+                             tag)
+  #bdt_utils.clean_bdt(base_name,tag)
+
 if __name__=='__main__':
-  train_vbf()
+  modelling_studies()
+  #train_vbf()
   #phidtighten_studies()
   #density_studies()
   #phmva_studies()

@@ -12,7 +12,8 @@ def get_tree_columns(filename, tree_name):
   '''
   in_file = ROOT.TFile(filename)
   tree = in_file.Get(tree_name)
-  columns = [(key.GetName(),key.GetTypeName()) for key in tree.GetListOfLeaves()]
+  columns = [(key.GetName(),key.GetTypeName()) for key in 
+              tree.GetListOfLeaves()]
   in_file.Close()
   return columns
 
@@ -54,6 +55,8 @@ def get_cpp_type(type_string):
   '''
   if (type_string=='Float_t'):
     return 'Float_t'
+  if (type_string=='Double_t'):
+    return 'Double_t'
   if (type_string=='Int_t'):
     return 'Int_t'
   else:
@@ -67,6 +70,8 @@ def get_root_type(type_string):
   '''
   if (type_string=='Float_t'):
     return 'F'
+  if (type_string=='Double_t'):
+    return 'D'
   if (type_string=='Int_t'):
     return 'I'
   else:
