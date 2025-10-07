@@ -11,6 +11,7 @@ from tensorflow import math, constant, where, boolean_mask, size, float32, clip_
 from tensorflow.keras.backend import epsilon
 from tensorflow.keras.regularizers import L1L2
 from tensorflow.keras.models import Sequential, Model, load_model
+from tensorflow.keras import metrics
 from tensorflow.keras.layers import BatchNormalization, Dropout, concatenate, Dense, Activation
 from tensorflow.keras.losses import Loss, MeanSquaredError, BinaryCrossentropy
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
@@ -29,7 +30,7 @@ if __name__ =='__main__':
   argument_parser.add_argument('-t','--tag', default='kin')
   args = argument_parser.parse_args()
 
-  train_columns = ['photon_idmva0','photon_mht_dphi','njet','ll_pt0',
+  train_columns = ['photon_idmva0','photon_mht_dphi','njet0','ll_pt0',
                    'photon_pt0','llphoton_pt0','mht0','ht0']
 
   #read files
@@ -37,7 +38,7 @@ if __name__ =='__main__':
   data_file = uproot.open(args.data_file)
 
   #make datasets using pandas
-  all_columns = train_columns+['w_param','rng']
+  all_columns = train_columns+['w_param','rng','is_data']
   simu_data_frame = simu_file['tree'].arrays(all_columns, library='pd')
   data_data_frame = data_file['tree'].arrays(all_columns, library='pd')
 
@@ -47,12 +48,14 @@ if __name__ =='__main__':
   simu_data_frame['w_param'] = (simu_data_frame['w_param']*w_mc_scale)
 
   #split datasets
-  simu_train_data = simu_data_frame[simu_data_frame.rng%10>=4]
-  data_train_data = data_data_frame[data_data_frame.rng%10>=4]
-  simu_valid_data = simu_data_frame[(simu_data_frame.rng%10==2)
-                                    |(simu_data_frame.rng%10==3)]
-  data_valid_data = data_data_frame[(data_data_frame.rng%10==2)
-                                    |(data_data_frame.rng%10==3)]
+  simu_train_data = simu_data_frame[simu_data_frame.rng<=0.6]
+  data_train_data = data_data_frame[data_data_frame.rng<=0.6]
+  simu_valid_data = simu_data_frame[(simu_data_frame.rng<=0.8)
+                                    &(simu_data_frame.rng>0.6)]
+  data_valid_data = data_data_frame[(data_data_frame.rng<=0.8)
+                                    &(data_data_frame.rng>0.6)]
+  simu_valid_data['w_param'] = simu_valid_data['w_param']*3
+  data_valid_data['w_param'] = data_valid_data['w_param']*3
   #simu_tests_data = simu_data_frame[simu_data_frame.event%10>7]
   #data_tests_data = data_data_frame[data_data_frame.event%10>7]
   #validation done elsewhere
@@ -107,26 +110,30 @@ if __name__ =='__main__':
   #build MVA model
   print('Building model.')
   n_input = len(train_columns)
-  width = [10,10]
-  lr = 0.0001
-  dropout = 0.1 #currently commented out
+  width = [15,15,15]
+  lr = 0.0003
+  dropout = 0.02
+  batch_size = 512
   depth = len(width) 
   model = Sequential()
   model.add(Dense(units=width[0], 
             input_dim=n_input, 
             activation='elu'))
   for i in range(1, depth):
-    #model.add(Dropout(dropout))
+    if dropout > 0.0:
+      model.add(Dropout(dropout))
     model.add(Dense(units=width[i], 
+              #kernel_regularizer=L1L2(l1=0.0, l2=0.001),
               activation='elu'))
-  #model.add(Dropout(dropout))
+  if dropout > 0.0:
+    model.add(Dropout(dropout))
   model.add(Dense(1, activation='sigmoid'))
 
   #perform training
   print('Training model.')
   model.compile(loss=BinaryCrossentropy(),
                 optimizer=Adam(learning_rate=lr, clipnorm=50.0),
-                weighted_metrics=[])
+                weighted_metrics=[metrics.BinaryCrossentropy()])
   callbacks = [
       # if no decrease of the loss for several epochs, terminate training.
       EarlyStopping(verbose=True, patience=8, monitor='val_loss'),
@@ -140,7 +147,7 @@ if __name__ =='__main__':
       sample_weight=wgt_vars_train,
       shuffle=True,
       epochs=100,
-      batch_size=1024,
+      batch_size=batch_size,
       validation_data=(inp_vars_valid,out_vars_valid,wgt_vars_valid),
       callbacks=callbacks,
       verbose=1)

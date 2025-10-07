@@ -31,7 +31,7 @@ def shuffle_events(filename, tree_name):
   out_file.write('\n')
   for column in columns:
       out_file.write('  '+root_utils.get_cpp_type(column[1])+' '+column[0]+' = 0;\n');
-      if column[1]=='Float_t' or column[1]=='Double_t':
+      if column[1]=='Float_t' or column[1]=='Double_t' or column[1]=='Int_t':
         out_file.write('  tree->SetBranchAddress("'+column[0]+'", &'+column[0]+');\n');
         out_file.write('  out_tree.Branch("'+column[0]+'", &'+column[0]+',"'+column[0]+'/'+root_utils.get_root_type(column[1])+'");\n');
   out_file.write('\n')

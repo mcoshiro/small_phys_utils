@@ -15,6 +15,10 @@ const rw_mmp_r3 dnn_r3;
 template <class C>
 using RVec = ROOT::VecOps::RVec<C>;
 
+bool isgood_hornveto(bool isgood, float pt, float eta) {
+  return isgood && (pt > 50 || fabs(eta)<2.5 || fabs(eta)>3.0);
+}
+
 float get_photon_sf_run2(std::vector<float> vars, int pflavor) {
   if (pflavor!=1) return 1.0;
   //input pt, abseta, idmva, res
@@ -90,8 +94,8 @@ bool photon_isjet(int nphoton, RVec<float> photon_eta, RVec<float> photon_phi,
 float get_photon_mht_dphi(RVec<float> photon_pt, RVec<float> photon_phi, 
     RVec<bool> photon_sig, RVec<float> el_pt, RVec<float> el_phi, 
     RVec<bool> el_sig, RVec<float> mu_pt, RVec<float> mu_phi, 
-    RVec<bool> mu_sig, RVec<float> jet_pt, RVec<float> jet_phi, 
-    RVec<bool> jet_isgood) {
+    RVec<bool> mu_sig, RVec<float> jet_pt, RVec<float> jet_eta, 
+    RVec<float> jet_phi, RVec<bool> jet_isgood) {
   float mht_x(0.0), mht_y(0.0);
   for (unsigned iel = 0; iel < el_sig.size(); iel++) {
     if (el_sig.at(iel)) {
@@ -115,7 +119,8 @@ float get_photon_mht_dphi(RVec<float> photon_pt, RVec<float> photon_phi,
     }
   }
   for (unsigned ijet = 0; ijet < jet_isgood.size(); ijet++) {
-    if (jet_isgood.at(ijet)) {
+    if (isgood_hornveto(jet_isgood.at(ijet), jet_pt.at(ijet), 
+                        jet_eta.at(ijet))) {
       float pt = jet_pt.at(ijet);
       mht_x += pt*cos(jet_phi.at(ijet));
       mht_y += pt*sin(jet_phi.at(ijet));
@@ -128,8 +133,8 @@ float get_photon_mht_dphi(RVec<float> photon_pt, RVec<float> photon_phi,
 float get_mht(RVec<float> photon_pt, RVec<float> photon_phi, 
     RVec<bool> photon_sig, RVec<float> el_pt, RVec<float> el_phi, 
     RVec<bool> el_sig, RVec<float> mu_pt, RVec<float> mu_phi, 
-    RVec<bool> mu_sig, RVec<float> jet_pt, RVec<float> jet_phi, 
-    RVec<bool> jet_isgood) {
+    RVec<bool> mu_sig, RVec<float> jet_pt, RVec<float> jet_eta, 
+    RVec<float> jet_phi, RVec<bool> jet_isgood) {
   float mht_x(0.0), mht_y(0.0);
   for (unsigned iel = 0; iel < el_sig.size(); iel++) {
     if (el_sig.at(iel)) {
@@ -153,7 +158,8 @@ float get_mht(RVec<float> photon_pt, RVec<float> photon_phi,
     }
   }
   for (unsigned ijet = 0; ijet < jet_isgood.size(); ijet++) {
-    if (jet_isgood.at(ijet)) {
+    if (isgood_hornveto(jet_isgood.at(ijet), jet_pt.at(ijet), 
+                        jet_eta.at(ijet))) {
       float pt = jet_pt.at(ijet);
       mht_x += pt*cos(jet_phi.at(ijet));
       mht_y += pt*sin(jet_phi.at(ijet));
@@ -165,8 +171,8 @@ float get_mht(RVec<float> photon_pt, RVec<float> photon_phi,
 float get_ht(RVec<float> photon_pt, RVec<float> photon_phi, 
     RVec<bool> photon_sig, RVec<float> el_pt, RVec<float> el_phi, 
     RVec<bool> el_sig, RVec<float> mu_pt, RVec<float> mu_phi, 
-    RVec<bool> mu_sig, RVec<float> jet_pt, RVec<float> jet_phi, 
-    RVec<bool> jet_isgood) {
+    RVec<bool> mu_sig, RVec<float> jet_pt, RVec<float> jet_phi,  
+    RVec<float> jet_eta, RVec<bool> jet_isgood) {
   float ht = 0.0;
   for (unsigned iel = 0; iel < el_sig.size(); iel++) {
     if (el_sig.at(iel)) {
@@ -184,7 +190,8 @@ float get_ht(RVec<float> photon_pt, RVec<float> photon_phi,
     }
   }
   for (unsigned ijet = 0; ijet < jet_isgood.size(); ijet++) {
-    if (jet_isgood.at(ijet)) {
+    if (isgood_hornveto(jet_isgood.at(ijet), jet_pt.at(ijet), 
+                        jet_eta.at(ijet))) {
       ht += jet_pt.at(ijet);
     }
   }
@@ -246,10 +253,12 @@ float get_w_jet(float year, int type, int njet, bool photon_isjet) {
   return 1.0;
 }
 
-float get_lead_jet_pt(RVec<bool> jet_isgood, RVec<float> jet_pt) {
+float get_lead_jet_pt(RVec<bool> jet_isgood, RVec<float> jet_pt, 
+                      RVec<float> jet_eta) {
   float max_pt = -999.0;
   for (unsigned ijet = 0; ijet < jet_isgood.size(); ijet++) {
-    if (jet_isgood[ijet]) {
+    if (isgood_hornveto(jet_isgood.at(ijet), jet_pt.at(ijet), 
+                        jet_eta.at(ijet))) {
       if (jet_pt[ijet] > max_pt) {
         max_pt = jet_pt[ijet];
       }
@@ -263,7 +272,8 @@ float get_lead_jet_eta(RVec<bool> jet_isgood, RVec<float> jet_pt,
   float max_pt = -999.0;
   float lead_eta = -999.0;
   for (unsigned ijet = 0; ijet < jet_isgood.size(); ijet++) {
-    if (jet_isgood[ijet]) {
+    if (isgood_hornveto(jet_isgood.at(ijet), jet_pt.at(ijet), 
+                        jet_eta.at(ijet))) {
       if (jet_pt[ijet] > max_pt) {
         max_pt = jet_pt[ijet];
         lead_eta = jet_eta[ijet];
@@ -273,11 +283,13 @@ float get_lead_jet_eta(RVec<bool> jet_isgood, RVec<float> jet_pt,
   return lead_eta;
 }
 
-float get_sublead_jet_pt(RVec<bool> jet_isgood, RVec<float> jet_pt) {
+float get_sublead_jet_pt(RVec<bool> jet_isgood, RVec<float> jet_pt, 
+                         RVec<float> jet_eta) {
   float max_pt = -999.0;
   float sublead_pt = -999.0;
   for (unsigned ijet = 0; ijet < jet_isgood.size(); ijet++) {
-    if (jet_isgood[ijet]) {
+    if (isgood_hornveto(jet_isgood.at(ijet), jet_pt.at(ijet), 
+                        jet_eta.at(ijet))) {
       if (jet_pt[ijet] > max_pt) {
         sublead_pt = max_pt;
         max_pt = jet_pt[ijet];
@@ -297,7 +309,8 @@ float get_sublead_jet_eta(RVec<bool> jet_isgood, RVec<float> jet_pt,
   float lead_eta = -999.0;
   float sublead_eta = -999.0;
   for (unsigned ijet = 0; ijet < jet_isgood.size(); ijet++) {
-    if (jet_isgood[ijet]) {
+    if (isgood_hornveto(jet_isgood.at(ijet), jet_pt.at(ijet), 
+                        jet_eta.at(ijet))) {
       if (jet_pt[ijet] > max_pt) {
         sublead_pt = max_pt;
         sublead_eta = lead_eta;
@@ -610,8 +623,8 @@ float get_w_llph_pt(float year, int type, bool this_photon_isjet,
 }
 
 float get_llpjj_pt(RVec<float> llphoton_pt, RVec<float> llphoton_phi, 
-                   RVec<float> jet_pt, RVec<float> jet_phi, 
-                   RVec<bool> jet_isgood) {
+                   RVec<float> jet_pt, RVec<float> jet_eta, 
+                   RVec<float> jet_phi, RVec<bool> jet_isgood) {
   float pt_x = llphoton_pt[0]*cos(llphoton_phi[0]);
   float pt_y = llphoton_pt[0]*sin(llphoton_phi[0]);
   float lead_jet_pt = -999;
@@ -619,7 +632,8 @@ float get_llpjj_pt(RVec<float> llphoton_pt, RVec<float> llphoton_phi,
   float lead_jet_phi = 0.0;
   float subl_jet_phi = 0.0;
   for (unsigned ijet = 0; ijet<jet_pt.size(); ijet++) {
-    if (jet_isgood[ijet]) {
+    if (isgood_hornveto(jet_isgood.at(ijet), jet_pt.at(ijet), 
+                        jet_eta.at(ijet))) {
       if (jet_pt[ijet] > lead_jet_pt) {
         subl_jet_pt = lead_jet_pt;
         subl_jet_phi = lead_jet_phi;

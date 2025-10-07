@@ -2,3 +2,5 @@
 *.so
 *.pcm
 *.root
+*.pyc
+*/__pycache__

@@ -132,8 +132,10 @@ class RplPlot:
     self.y_max_lower = 1.25
     self.log_x = False
     self.log_y = False
+    self.log_z = False
     self.log_y_bottom = False
-    self.lumi_data = [(138,13)] #list of tuples in format (lumi [fbinv], energy [TeV])
+    #list of tuples in format (lumi [fbinv], energy [TeV])
+    self.lumi_data = [(138,13)] 
     self.title_type = 'cms private work'
     self.legend_xlo = 0.19
     self.legend_xhi = 0.91
@@ -144,6 +146,7 @@ class RplPlot:
     self.hists = []
     self.hist_color = []
     self.hist_style = [] #point, outline, filled
+    self.hist_legend = []
     self.color_index = 0
     self.palette = get_palette_official(10)
     self.graphs = []
@@ -175,6 +178,7 @@ class RplPlot:
       raise ValueError('Unsupported plot style')
     self.hist_style.append(style)
     self.hists.append(hist)
+    self.hist_legend.append(True)
     if self.n_plots == 0:
       xaxis_title = hist.GetXaxis().GetTitle()
       if self.x_title == 'x variable' and xaxis_title != '':
@@ -444,6 +448,8 @@ class RplPlot:
     top_pad.SetFillStyle(4000)
     top_pad.SetLogy(self.log_y)
     top_pad.SetLogx(self.log_x)
+    if (self.log_z):
+      top_pad.SetLogz(self.log_z)
 
     bot_pad = ROOT.TPad('bot_pad','',0.0,0.0,1.0,1.0)
     bot_pad.SetTicks(1,1)
@@ -469,7 +475,8 @@ class RplPlot:
       if (not self.legend_customsize):
         if (self.n_plots < self.legend_ncolumns*4):
           self.legend_ylo = 0.9-0.03*(self.n_plots//self.legend_ncolumns+1)
-      leg = ROOT.TLegend(self.legend_xlo,self.legend_ylo,self.legend_xhi,self.legend_yhi)
+      leg = ROOT.TLegend(self.legend_xlo,self.legend_ylo,self.legend_xhi,
+                         self.legend_yhi)
       leg.SetEntrySeparation(0)
       leg.SetTextSize(0.03)
       n_columns = self.legend_ncolumns
@@ -479,7 +486,9 @@ class RplPlot:
       if (n_columns > 2):
         leg.SetTextSize(0.015)
       color_index = 0
-      for hist, color, style in zip(self.hists, self.hist_color, self.hist_style):
+      for hist, color, style, draw_legend in zip(self.hists, self.hist_color, 
+                                                 self.hist_style, 
+                                                 self.hist_legend):
         hist.SetLineWidth(3)
         hist.SetLineColor(color)
         if style=='point':
@@ -488,19 +497,23 @@ class RplPlot:
           ROOT.gStyle.SetErrorX(0.01)
           hist.Draw('same P E0')
           ROOT.gStyle.SetErrorX(0.5)
-          leg.AddEntry(hist, hist.GetTitle(), 'LP')
+          if draw_legend:
+            leg.AddEntry(hist, hist.GetTitle(), 'LP')
         elif style=='outline':
           hist.Draw('same hist')
-          leg.AddEntry(hist, hist.GetTitle(), 'F')
+          if draw_legend:
+            leg.AddEntry(hist, hist.GetTitle(), 'F')
         elif style=='outlineerror':
           hist.SetMarkerColor(color)
           hist.SetFillColorAlpha(color,0.33)
           hist.Draw('same L E2')
-          leg.AddEntry(hist, hist.GetTitle(), 'F')
+          if draw_legend:
+            leg.AddEntry(hist, hist.GetTitle(), 'F')
         elif style=='filled':
           hist.SetFillColor(color)
           hist.Draw('same hist')
-          leg.AddEntry(hist, hist.GetTitle(), 'F')
+          if draw_legend:
+            leg.AddEntry(hist, hist.GetTitle(), 'F')
       for graph, color in zip(self.graphs, self.graph_color):
         graph.SetLineWidth(3)
         graph.SetLineColor(color)
@@ -556,7 +569,8 @@ class RplPlot:
         first = False
       else:
         lumi_energy_string += ' + '
-      lumi_energy_string += str(lumi_datum[0])+' fb^{-1} ('+str(lumi_datum[1])+' TeV)'
+      lumi_energy_string += (str(lumi_datum[0])+' fb^{-1} ('+str(lumi_datum[1])
+                             +' TeV)')
     lumi_energy_string += '}'
     if not (self.title_type == 'cms simulation'):
       label.DrawLatex(1.0-right_margin-0.01,0.96,lumi_energy_string)
@@ -571,7 +585,8 @@ class RplPlot:
       bottom_ref_value = 1.0
       if not self.bottom_is_ratio:
         bottom_ref_value = 0.0
-      line = ROOT.TLine(self.x_min,bottom_ref_value,self.x_max,bottom_ref_value)
+      line = ROOT.TLine(self.x_min,bottom_ref_value,self.x_max,
+                        bottom_ref_value)
       line.SetNDC(ROOT.kFALSE)
       line.SetLineStyle(2)
       line.SetLineColor(ROOT.kBlack)

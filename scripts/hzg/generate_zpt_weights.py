@@ -137,8 +137,10 @@ def setup_dataframes(common_defines: bool=True,
         #sub_dfs[-1] = sub_dfs[-1].Define('w_lumiyear',
         #      'weight_fix*w_year*w_photon_lowpt*w_phshape*w_fakepteta'
         #      +'*w_llph_pt*w_llpjj_pt')
+        #sub_dfs[-1] = sub_dfs[-1].Define('w_lumiyear',
+        #      'weight_fix*w_year*w_photon_lowpt*w_phshape*w_fakepteta')
         sub_dfs[-1] = sub_dfs[-1].Define('w_lumiyear',
-              'weight_fix*w_year*w_photon_lowpt*w_phshape*w_fakepteta')
+              'weight_fix*w_year*w_photon_lowpt*w_phshape')
         sub_dfs[-1] = sub_dfs[-1].Filter('use_event')
     dfs.append(RDataFrameSet(sub_dfs))
     #sideband selection
@@ -159,13 +161,13 @@ def setup_dataframes(common_defines: bool=True,
       dfs[-1] = dfs[-1].Define('zg_pt','llphoton_pt[0]')
       dfs[-1] = dfs[-1].Define('mht0',('get_mht('
           +'photon_pt, photon_phi, photon_sig, el_pt, el_phi, el_sig, mu_pt,'
-          +' mu_phi, mu_sig, jet_pt, jet_phi, jet_isgood)'))
+          +' mu_phi, mu_sig, jet_pt, jet_eta, jet_phi, jet_isgood)'))
       dfs[-1] = dfs[-1].Define('ht0',('get_ht('
           +'photon_pt, photon_phi, photon_sig, el_pt, el_phi, el_sig, mu_pt,'
-          +' mu_phi, mu_sig, jet_pt, jet_phi, jet_isgood)'))
+          +' mu_phi, mu_sig, jet_pt, jet_eta, jet_phi, jet_isgood)'))
       dfs[-1] = dfs[-1].Define('photon_mht_dphi',('get_photon_mht_dphi('
           +'photon_pt, photon_phi, photon_sig, el_pt, el_phi, el_sig, mu_pt,'
-          +' mu_phi, mu_sig, jet_pt, jet_phi, jet_isgood)'))
+          +' mu_phi, mu_sig, jet_pt, jet_eta, jet_phi, jet_isgood)'))
       dfs[-1] = dfs[-1].Define('photon_pt0','photon_pt[0]')
       dfs[-1] = dfs[-1].Define('photon_idmva0','photon_idmva[0]')
       dfs[-1] = dfs[-1].Define('photon_abseta0','fabs(photon_eta[0])')
@@ -180,11 +182,11 @@ def setup_dataframes(common_defines: bool=True,
       dfs[-1] = dfs[-1].Define('llphoton_dijet_absdphi0',
                                'fabs(llphoton_dijet_dphi[0])')
       dfs[-1] = dfs[-1].Define('lead_jet_pt',
-                               'get_lead_jet_pt(jet_isgood, jet_pt)')
+                               'get_lead_jet_pt(jet_isgood, jet_pt, jet_eta)')
       dfs[-1] = dfs[-1].Define('lead_jet_abseta',
           'fabs(get_lead_jet_eta(jet_isgood, jet_pt, jet_eta))')
       dfs[-1] = dfs[-1].Define('sublead_jet_pt',
-                               'get_sublead_jet_pt(jet_isgood, jet_pt)')
+          'get_sublead_jet_pt(jet_isgood, jet_pt, jet_eta)')
       dfs[-1] = dfs[-1].Define('sublead_jet_abseta',
           'fabs(get_sublead_jet_eta(jet_isgood, jet_pt, jet_eta))')
   return dfs
@@ -866,6 +868,10 @@ def generate_dnn_datasets():
   dfs[2] = dfs[2].Define('w_param','1')
   dfs[1] = dfs[1].Define('w_param','(r2_rw_hist->GetBinContent(r2_rw_hist->FindBin(photon_idmva0,photon_mht_dphi)))*w_lumiyear')
   dfs[3] = dfs[3].Define('w_param','(r3_rw_hist->GetBinContent(r3_rw_hist->FindBin(photon_idmva0,photon_mht_dphi)))*w_lumiyear')
+  dfs[0] = dfs[0].Define('njet0','static_cast<float>(njet)')
+  dfs[1] = dfs[1].Define('njet0','static_cast<float>(njet)')
+  dfs[2] = dfs[2].Define('njet0','static_cast<float>(njet)')
+  dfs[3] = dfs[3].Define('njet0','static_cast<float>(njet)')
   for idf in range(4):
     dfs[idf] = dfs[idf].Define('rng','rng3.Uniform()')
   #define columns and save
@@ -874,9 +880,9 @@ def generate_dnn_datasets():
   dfs[1] = dfs[1].Define('is_data','0')
   dfs[2] = dfs[2].Define('is_data','1')
   dfs[3] = dfs[3].Define('is_data','0')
-  save_columns = ('w_param', 'photon_idmva0', 'photon_mht_dphi', 'njet', 'rng', 
-                  'll_pt0', 'photon_pt0', 'llphoton_pt0', 'mht0', 'ht0',
-                  'is_data')
+  save_columns = ('w_param', 'photon_idmva0', 'photon_mht_dphi', 'njet0', 
+                  'rng', 'll_pt0', 'photon_pt0', 'llphoton_pt0', 'mht0', 
+                  'ht0', 'is_data')
   write_dataframe_set(dfs[0], 'dataset/kindnn_in_r2_data.root', save_columns)
   write_dataframe_set(dfs[1], 'dataset/kindnn_in_r2_simu.root', save_columns)
   write_dataframe_set(dfs[2], 'dataset/kindnn_in_r3_data.root', save_columns)
@@ -1609,11 +1615,11 @@ if __name__=='__main__':
   #fit_sfs(LLPH_PT_BINS, sfs_mczg, 'fit_sfs_mczg', 4, True)
   #fit_sfs(LLPH_PT_BINS, sfs_dyjt, 'fit_sfs_dyjt', 4, True)
   #fit_sfs(LLPH_PT_BINS, sfs_dypu, 'fit_sfs_dypu', 4, True)
-  #get_fakephoton_weights()
+  get_fakephoton_weights()
   #get_fakephoton_quality_weights()
   #get_llphpt_weights()
   #get_llpjj_weights()
   #generate_bdt_datasets()
   #get_njetllph_weights()
-  generate_dnn_datasets()
+  #generate_dnn_datasets()
 
